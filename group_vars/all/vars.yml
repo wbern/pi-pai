@@ -1,0 +1,29 @@
+# Pi connection settings
+pi_tailscale_ip: "100.x.x.x"  # Set your Tailscale IP
+pi_user: "pi"                  # Your Pi username
+pi_home: "/home/{{ pi_user }}"
+
+# Docker image settings
+docker_image_name: "claude-code"
+docker_memory_limit: "3g"
+
+# Git configuration for commits made by Claude
+claude_git_name: "Claude (Pi)"
+claude_git_email: "claude@localhost"
+
+# MCP server settings
+mcp_server_port: 3100
+mcp_bearer_token: "tmux-local-dev"
+
+# Node.js version
+node_lts_version: "22"
+
+# tmux session name
+tmux_session_name: "main"
+
+# Paths
+repos_dir: "{{ pi_home }}/Repos"
+claude_docker_dir: "{{ pi_home }}/.claude-docker"
+control_plane_dir: "{{ pi_home }}/.claude-control-plane"
+mcp_server_dir: "{{ pi_home }}/tmux-control-plane"
+docker_image_dir: "{{ pi_home }}/claude-sandbox-image"

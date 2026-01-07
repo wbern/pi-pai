@@ -1,0 +1,21 @@
+
+# Claude server greeting (only for interactive shells, not tmux attach)
+if [[ $- == *i* ]] && [[ -z "$TMUX" ]]; then
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════"
+    echo "  🤖 Claude Code Server"
+    echo "═══════════════════════════════════════════════════════════════"
+    echo ""
+    echo "  Quick commands:"
+    echo "    claude                        Open helper agent (human-in-loop)"
+    echo "    ~/claude-sandbox.sh           Run control plane (isolated)"
+    echo "    ~/claude-sandbox-shell.sh     Get a bash shell inside the sandbox"
+    echo "    ~/claude-attach.sh            Attach to running tmux session"
+    echo "    ~/upgrade-claude.sh           Rebuild Docker with latest Claude"
+    echo ""
+    echo "  Control plane spawns sessions via MCP:"
+    echo "    spawn_session({ repo, instruction, window_name })"
+    echo ""
+    echo "═══════════════════════════════════════════════════════════════"
+    echo ""
+fi

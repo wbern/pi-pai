@@ -1,0 +1,26 @@
+# Ansible
+.ansible_cache/
+*.retry
+
+# Secrets (vault.yml should be encrypted, but just in case)
+# Do NOT add vault.yml here - we want to track the encrypted version
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Temp files
+*.tmp
+*.bak

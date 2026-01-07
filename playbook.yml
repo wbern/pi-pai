@@ -1,0 +1,346 @@
+---
+# Raspberry Pi Claude Server Deployment
+# Run with: ansible-playbook playbook.yml --ask-vault-pass
+
+- name: Deploy Claude Code server to Raspberry Pi
+  hosts: pi
+  gather_facts: true
+
+  vars:
+    # Override in group_vars/all/vars.yml
+    pi_home: "{{ ansible_env.HOME }}"
+
+  tasks:
+    # =========================================================================
+    # Prerequisites
+    # =========================================================================
+    - name: Install system packages
+      become: true
+      ansible.builtin.apt:
+        name:
+          - tmux
+          - git
+          - curl
+          - build-essential
+          - unzip
+          - htop
+          - neovim
+          - zram-tools
+          - cpufrequtils
+        state: present
+        update_cache: true
+      tags: [packages]
+
+    - name: Set CPU governor to schedutil
+      become: true
+      ansible.builtin.copy:
+        content: 'GOVERNOR="schedutil"'
+        dest: /etc/default/cpufrequtils
+        mode: '0644'
+      tags: [performance]
+
+    # =========================================================================
+    # Docker
+    # =========================================================================
+    - name: Check if Docker is installed
+      ansible.builtin.command: docker --version
+      register: docker_check
+      changed_when: false
+      failed_when: false
+      tags: [docker]
+
+    - name: Install Docker
+      become: true
+      ansible.builtin.shell: curl -fsSL https://get.docker.com | sh
+      when: docker_check.rc != 0
+      tags: [docker]
+
+    - name: Add user to docker group
+      become: true
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: true
+      tags: [docker]
+
+    # =========================================================================
+    # Node.js via nvm
+    # =========================================================================
+    - name: Check if nvm is installed
+      ansible.builtin.stat:
+        path: "{{ pi_home }}/.nvm/nvm.sh"
+      register: nvm_check
+      tags: [nodejs]
+
+    - name: Install nvm
+      ansible.builtin.shell: |
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+      when: not nvm_check.stat.exists
+      tags: [nodejs]
+
+    - name: Install Node.js LTS via nvm
+      ansible.builtin.shell: |
+        source {{ pi_home }}/.nvm/nvm.sh
+        nvm install --lts
+      args:
+        executable: /bin/bash
+      tags: [nodejs]
+
+    - name: Install pnpm via corepack
+      ansible.builtin.shell: |
+        source {{ pi_home }}/.nvm/nvm.sh
+        corepack enable
+        corepack prepare pnpm@latest --activate
+      args:
+        executable: /bin/bash
+      tags: [nodejs]
+
+    # =========================================================================
+    # Directory Structure
+    # =========================================================================
+    - name: Create required directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ repos_dir }}"
+        - "{{ claude_docker_dir }}"
+        - "{{ claude_docker_dir }}/tmp"
+        - "{{ claude_docker_dir }}/.ssh"
+        - "{{ claude_docker_dir }}/.happy"
+        - "{{ control_plane_dir }}/workspace"
+        - "{{ mcp_server_dir }}"
+        - "{{ docker_image_dir }}"
+        - "{{ pi_home }}/.config/systemd/user"
+        - "{{ pi_home }}/.tmux/plugins"
+      tags: [directories]
+
+    # =========================================================================
+    # Configuration Files
+    # =========================================================================
+    - name: Deploy tmux configuration
+      ansible.builtin.copy:
+        src: files/configs/tmux.conf
+        dest: "{{ pi_home }}/.tmux.conf"
+        mode: '0644'
+      tags: [configs]
+
+    - name: Deploy Claude settings.json
+      ansible.builtin.copy:
+        src: files/configs/settings.json
+        dest: "{{ claude_docker_dir }}/settings.json"
+        mode: '0644'
+      tags: [configs]
+
+    - name: Deploy SSH config for Docker
+      ansible.builtin.copy:
+        src: files/configs/ssh_config
+        dest: "{{ claude_docker_dir }}/.ssh/config"
+        mode: '0600'
+      tags: [configs]
+
+    - name: Set SSH directory permissions
+      ansible.builtin.file:
+        path: "{{ claude_docker_dir }}/.ssh"
+        mode: '0700'
+      tags: [configs]
+
+    # =========================================================================
+    # Scripts
+    # =========================================================================
+    - name: Deploy scripts
+      ansible.builtin.copy:
+        src: "files/scripts/{{ item }}"
+        dest: "{{ pi_home }}/{{ item }}"
+        mode: '0755'
+      loop:
+        - claude-sandbox.sh
+        - upgrade-claude.sh
+        - claude-sandbox-shell.sh
+        - claude-attach.sh
+      tags: [scripts]
+
+    # =========================================================================
+    # Documentation (CLAUDE.md files)
+    # =========================================================================
+    - name: Deploy Repos CLAUDE.md
+      ansible.builtin.copy:
+        src: files/docs/CLAUDE-repos.md
+        dest: "{{ repos_dir }}/CLAUDE.md"
+        mode: '0644'
+      tags: [docs]
+
+    - name: Deploy control plane CLAUDE.md
+      ansible.builtin.copy:
+        src: files/docs/CLAUDE-control-plane.md
+        dest: "{{ control_plane_dir }}/workspace/CLAUDE.md"
+        mode: '0644'
+      tags: [docs]
+
+    - name: Deploy helper CLAUDE.md
+      ansible.builtin.copy:
+        src: files/docs/CLAUDE-helper.md
+        dest: "{{ pi_home }}/CLAUDE.md"
+        mode: '0644'
+      tags: [docs]
+
+    # =========================================================================
+    # Docker Image
+    # =========================================================================
+    - name: Deploy Dockerfile
+      ansible.builtin.template:
+        src: templates/Dockerfile.j2
+        dest: "{{ docker_image_dir }}/Dockerfile"
+        mode: '0644'
+      tags: [docker]
+
+    - name: Build Claude Code Docker image
+      ansible.builtin.command:
+        cmd: docker build -t {{ docker_image_name }} .
+        chdir: "{{ docker_image_dir }}"
+      register: docker_build
+      changed_when: "'Successfully built' in docker_build.stdout or 'Successfully tagged' in docker_build.stdout"
+      tags: [docker]
+
+    # =========================================================================
+    # MCP Server
+    # =========================================================================
+    - name: Deploy MCP server files
+      ansible.builtin.copy:
+        src: "files/mcp-server/{{ item }}"
+        dest: "{{ mcp_server_dir }}/{{ item }}"
+        mode: "{{ '0755' if item == 'start.sh' else '0644' }}"
+      loop:
+        - package.json
+        - server.js
+        - start.sh
+      tags: [mcp]
+
+    - name: Install MCP server dependencies
+      ansible.builtin.shell: |
+        source {{ pi_home }}/.nvm/nvm.sh
+        cd {{ mcp_server_dir }}
+        pnpm install
+      args:
+        executable: /bin/bash
+      tags: [mcp]
+
+    - name: Deploy control plane MCP config
+      ansible.builtin.template:
+        src: templates/mcp.json.j2
+        dest: "{{ control_plane_dir }}/workspace/.mcp.json"
+        mode: '0644'
+      tags: [mcp]
+
+    # =========================================================================
+    # Secrets (from vault)
+    # =========================================================================
+    - name: Store GitHub PAT
+      ansible.builtin.copy:
+        content: "{{ vault_github_pat }}"
+        dest: "{{ claude_docker_dir }}/.github_token"
+        mode: '0600'
+      when: vault_github_pat is defined and vault_github_pat != ""
+      no_log: true
+      tags: [secrets]
+
+    - name: Store Context7 token
+      ansible.builtin.copy:
+        content: "{{ vault_context7_token }}"
+        dest: "{{ claude_docker_dir }}/.context7_token"
+        mode: '0600'
+      when: vault_context7_token is defined and vault_context7_token != ""
+      no_log: true
+      tags: [secrets]
+
+    # =========================================================================
+    # Systemd Services
+    # =========================================================================
+    - name: Enable user lingering
+      become: true
+      ansible.builtin.command: loginctl enable-linger {{ ansible_user }}
+      changed_when: false
+      tags: [systemd]
+
+    - name: Deploy systemd services
+      ansible.builtin.copy:
+        src: "files/systemd/{{ item }}"
+        dest: "{{ pi_home }}/.config/systemd/user/{{ item }}"
+        mode: '0644'
+      loop:
+        - claude-tmux.service
+        - tmux-control-plane.service
+      notify:
+        - Reload systemd
+      tags: [systemd]
+
+    - name: Enable and start services
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+        scope: user
+      loop:
+        - tmux-control-plane
+        - claude-tmux
+      tags: [systemd]
+
+    # =========================================================================
+    # tmux Plugins
+    # =========================================================================
+    - name: Clone TPM (tmux plugin manager)
+      ansible.builtin.git:
+        repo: https://github.com/tmux-plugins/tpm
+        dest: "{{ pi_home }}/.tmux/plugins/tpm"
+        depth: 1
+      tags: [tmux]
+
+    # =========================================================================
+    # Shell Greeting
+    # =========================================================================
+    - name: Check if greeting already in bashrc
+      ansible.builtin.command: grep -q "Claude Code Server" {{ pi_home }}/.bashrc
+      register: greeting_check
+      changed_when: false
+      failed_when: false
+      tags: [shell]
+
+    - name: Add login greeting to bashrc
+      ansible.builtin.blockinfile:
+        path: "{{ pi_home }}/.bashrc"
+        marker: "# {mark} ANSIBLE MANAGED - Claude greeting"
+        block: "{{ lookup('template', 'templates/bashrc_greeting.j2') }}"
+      when: greeting_check.rc != 0
+      tags: [shell]
+
+    # =========================================================================
+    # Host-level Claude Code (optional)
+    # =========================================================================
+    - name: Install Claude Code on host
+      ansible.builtin.shell: |
+        source {{ pi_home }}/.nvm/nvm.sh
+        npm install -g @anthropic-ai/claude-code
+      args:
+        executable: /bin/bash
+      tags: [host-claude]
+
+    - name: Check if telemetry disable in bashrc
+      ansible.builtin.command: grep -q "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" {{ pi_home }}/.bashrc
+      register: telemetry_check
+      changed_when: false
+      failed_when: false
+      tags: [host-claude]
+
+    - name: Disable telemetry in bashrc
+      ansible.builtin.lineinfile:
+        path: "{{ pi_home }}/.bashrc"
+        line: 'export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1'
+      when: telemetry_check.rc != 0
+      tags: [host-claude]
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+        scope: user

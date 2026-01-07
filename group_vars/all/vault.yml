@@ -1,0 +1,8 @@
+# Encrypt this file with: ansible-vault encrypt group_vars/all/vault.yml
+# Then set ANSIBLE_VAULT_PASSWORD_FILE=~/.vault_pass or use --ask-vault-pass
+
+# GitHub Personal Access Token (fine-grained)
+vault_github_pat: "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Context7 API Token (optional)
+vault_context7_token: ""
