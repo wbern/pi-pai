@@ -2,8 +2,16 @@
 .ansible_cache/
 *.retry
 
-# Secrets (vault.yml should be encrypted, but just in case)
+# Secrets - vault.yml should be encrypted but these catch mistakes
 # Do NOT add vault.yml here - we want to track the encrypted version
+*.vault_pass
+.vault_pass*
+*_secret*
+*.pem
+*.key
+
+# Local OAuth tokens for testing (copy your ~/.claude here)
+.tokens/
 
 # Python
 __pycache__/
@@ -24,3 +32,7 @@ Thumbs.db
 # Temp files
 *.tmp
 *.bak
+
+# Claude Code
+.claude/settings.local.json
+group_vars/all/zzz_local.yml

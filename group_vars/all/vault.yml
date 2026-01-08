@@ -2,7 +2,19 @@
 # Then set ANSIBLE_VAULT_PASSWORD_FILE=~/.vault_pass or use --ask-vault-pass
 
 # GitHub Personal Access Token (fine-grained)
+# Required scopes: repo, admin:public_key (for auto SSH key upload)
 vault_github_pat: "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# Tailscale Auth Key (optional - for automated setup)
+# Generate at: https://login.tailscale.com/admin/settings/keys
+# Use a reusable key if re-running playbook
+vault_tailscale_authkey: ""
 
 # Context7 API Token (optional)
 vault_context7_token: ""
+
+# MCP Server Bearer Token (recommended for production)
+# Used for authenticating to tmux-control-plane MCP server
+# If not set, defaults to "tmux-local-dev" which is INSECURE for non-local deployments
+# Generate a secure token: openssl rand -hex 32
+vault_mcp_bearer_token: ""

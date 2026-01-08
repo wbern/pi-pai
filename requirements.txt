@@ -1,0 +1,7 @@
+# Molecule testing framework
+molecule>=6.0.0
+molecule-plugins>=23.0.0
+
+# Ansible (if not installed via brew)
+# ansible>=2.15.0
+# ansible-lint>=6.0.0

@@ -1,0 +1,65 @@
+---
+- name: Create OrbStack VM
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    vm_user: "{{ lookup('env', 'USER') }}"
+    vm_host: "ubuntu.orb.local"
+
+  tasks:
+    - name: Check if VM already exists
+      ansible.builtin.command: orb list -q
+      register: orb_list
+      changed_when: false
+      failed_when: false
+
+    - name: Create Ubuntu VM
+      ansible.builtin.command: orb create ubuntu:24.04 ubuntu
+      when: "'ubuntu' not in orb_list.stdout"
+
+    - name: Check if SSH server is installed
+      ansible.builtin.shell: |
+        orb -m ubuntu bash -c 'which sshd'
+      register: sshd_check
+      failed_when: false
+      changed_when: false
+
+    - name: Install SSH server
+      when: sshd_check.rc != 0
+      ansible.builtin.shell: |
+        orb -m ubuntu bash -c 'sudo apt-get update && sudo apt-get install -y openssh-server && sudo systemctl enable --now ssh'
+
+    - name: Wait for SSH port
+      ansible.builtin.wait_for:
+        host: "{{ vm_host }}"
+        port: 22
+        delay: 2
+        timeout: 60
+
+    - name: Copy SSH public key to VM
+      # Use > not >> since test VM only needs one key (avoids duplicates on re-run)
+      ansible.builtin.shell: |
+        cat ~/.ssh/id_ed25519.pub | orb -m ubuntu bash -c 'mkdir -p ~/.ssh && chmod 700 ~/.ssh && cat > ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
+      register: ssh_key_copy
+      changed_when: ssh_key_copy.rc == 0
+
+    - name: Clear stale host keys
+      ansible.builtin.command: ssh-keygen -R {{ vm_host }}
+      failed_when: false
+      changed_when: false
+
+    - name: Accept new host key
+      ansible.builtin.shell: |
+        ssh-keyscan -H {{ vm_host }} >> ~/.ssh/known_hosts 2>/dev/null
+      changed_when: false
+
+    - name: Verify SSH access works
+      ansible.builtin.command: ssh -o BatchMode=yes -o ConnectTimeout=5 {{ vm_user }}@{{ vm_host }} 'echo ok'
+      register: ssh_test
+      retries: 3
+      delay: 2
+      until: ssh_test.rc == 0
+
+    # OAuth tokens are now copied by playbook.yml during converge
+    # This ensures consistent paths and single source of truth

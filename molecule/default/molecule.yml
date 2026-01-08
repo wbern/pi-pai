@@ -1,0 +1,32 @@
+---
+dependency:
+  name: galaxy
+
+driver:
+  name: default
+  options:
+    managed: false
+
+platforms:
+  - name: pi
+    ansible_host: ubuntu.orb.local
+    ansible_user: "{{ lookup('env', 'USER') }}"
+    ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+    groups:
+      - all
+
+provisioner:
+  name: ansible
+  playbooks:
+    create: create.yml
+    converge: ../../playbook.yml
+    destroy: destroy.yml
+  inventory:
+    host_vars:
+      pi:
+        ansible_host: ubuntu.orb.local
+        ansible_user: "{{ lookup('env', 'USER') }}"
+        ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+
+verifier:
+  name: ansible

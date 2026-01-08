@@ -1,7 +1,8 @@
 # Pi connection settings
-pi_tailscale_ip: "100.x.x.x"  # Set your Tailscale IP
-pi_user: "pi"                  # Your Pi username
-pi_home: "/home/{{ pi_user }}"
+pi_host: "YOUR_PI_HOST"        # Hostname or IP (e.g., "claude-pi.local" or Tailscale IP)
+pi_user: "pi"                  # Your Pi username (created in Pi Imager)
+pi_ssh_key: "~/.ssh/id_ed25519"  # SSH private key for Pi access (optional if using SSH agent)
+# pi_home is set dynamically in playbook.yml from ansible_env.HOME
 
 # Docker image settings
 docker_image_name: "claude-code"
@@ -13,7 +14,9 @@ claude_git_email: "claude@localhost"
 
 # MCP server settings
 mcp_server_port: 3100
-mcp_bearer_token: "tmux-local-dev"
+# Bearer token is set in vault.yml (vault_mcp_bearer_token)
+# Falls back to dev default if not set in vault
+mcp_bearer_token: "{{ vault_mcp_bearer_token | default('tmux-local-dev') }}"
 
 # Node.js version
 node_lts_version: "22"

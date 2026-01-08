@@ -1,0 +1,17 @@
+---
+- name: Destroy OrbStack VM
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Delete the VM
+      ansible.builtin.command: orb delete ubuntu -f
+      register: result
+      failed_when: false
+      changed_when: "'Deleted' in result.stdout or result.rc == 0"
+
+    - name: Remove from known_hosts
+      ansible.builtin.command: ssh-keygen -R ubuntu.orb.local
+      failed_when: false
+      changed_when: false

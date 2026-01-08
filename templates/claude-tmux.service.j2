@@ -3,8 +3,8 @@ Description=Claude Code tmux session
 
 [Service]
 Type=forking
-ExecStart=/usr/bin/tmux new-session -d -s main -n main %h/claude-sandbox.sh
-ExecStop=/usr/bin/tmux kill-session -t main
+ExecStart=/usr/bin/tmux new-session -d -s {{ tmux_session_name }} -n {{ tmux_session_name }} %h/claude-sandbox.sh
+ExecStop=/usr/bin/tmux kill-session -t {{ tmux_session_name }}
 
 # Always restart when session exits (clean or crash)
 # Does NOT restart when stopped via: systemctl --user stop claude-tmux

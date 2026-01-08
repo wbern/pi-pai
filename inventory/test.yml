@@ -1,0 +1,7 @@
+# Test inventory for OrbStack VM (uses your Mac username)
+all:
+  hosts:
+    pi:
+      ansible_host: ubuntu.orb.local
+      ansible_user: "{{ lookup('env', 'USER') }}"
+      ansible_ssh_private_key_file: ~/.ssh/id_ed25519

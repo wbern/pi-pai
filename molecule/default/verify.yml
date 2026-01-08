@@ -1,0 +1,206 @@
+---
+- name: Verify deployment
+  hosts: all
+  gather_facts: false
+
+  tasks:
+    # =========================================================================
+    # Service Health Checks
+    # =========================================================================
+    - name: Check MCP server health
+      ansible.builtin.uri:
+        url: http://localhost:3100/health
+        return_content: true
+      register: health
+      failed_when: "'ok' not in health.content"
+
+    - name: Check tmux-control-plane service is enabled
+      ansible.builtin.command: systemctl --user is-enabled tmux-control-plane
+      register: tmux_cp_enabled
+      changed_when: false
+      failed_when: tmux_cp_enabled.stdout != 'enabled'
+
+    - name: Check tmux-control-plane service is running
+      ansible.builtin.command: systemctl --user is-active tmux-control-plane
+      register: tmux_cp_active
+      changed_when: false
+      failed_when: tmux_cp_active.stdout != 'active'
+
+    - name: Check claude-tmux service is enabled
+      ansible.builtin.command: systemctl --user is-enabled claude-tmux
+      register: claude_tmux_enabled
+      changed_when: false
+      failed_when: claude_tmux_enabled.stdout != 'enabled'
+
+    - name: Check claude-tmux service is running
+      ansible.builtin.command: systemctl --user is-active claude-tmux
+      register: claude_tmux_active
+      changed_when: false
+      failed_when: claude_tmux_active.stdout != 'active'
+
+    - name: Check tmux session exists
+      ansible.builtin.command: tmux has-session -t main
+      register: tmux_session
+      changed_when: false
+      failed_when: tmux_session.rc != 0
+
+    # =========================================================================
+    # Docker Checks
+    # =========================================================================
+    - name: Check Docker is installed
+      ansible.builtin.command: docker --version
+      register: docker_version
+      changed_when: false
+      failed_when: docker_version.rc != 0
+
+    - name: Check user is in docker group
+      ansible.builtin.command: groups
+      register: user_groups
+      changed_when: false
+      failed_when: "'docker' not in user_groups.stdout"
+
+    - name: Check Docker image exists
+      ansible.builtin.command: docker images claude-code --format "{{ '{{' }}.Repository{{ '}}' }}"
+      register: docker_image
+      changed_when: false
+      failed_when: "'claude-code' not in docker_image.stdout"
+
+    # =========================================================================
+    # Node.js / Tool Checks
+    # =========================================================================
+    - name: Check nvm is installed
+      ansible.builtin.stat:
+        path: ~/.nvm/nvm.sh
+      register: nvm_check
+      failed_when: not nvm_check.stat.exists
+
+    - name: Check Node.js is available
+      ansible.builtin.shell: |
+        source ~/.nvm/nvm.sh
+        node --version
+      args:
+        executable: /bin/bash
+      register: node_version
+      changed_when: false
+      failed_when: node_version.rc != 0
+
+    - name: Check pnpm is available
+      ansible.builtin.shell: |
+        source ~/.nvm/nvm.sh
+        pnpm --version
+      args:
+        executable: /bin/bash
+      register: pnpm_version
+      changed_when: false
+      failed_when: pnpm_version.rc != 0
+
+    # =========================================================================
+    # File and Directory Checks
+    # =========================================================================
+    - name: Check SSH key was generated
+      ansible.builtin.stat:
+        path: ~/.claude-docker/.ssh/id_ed25519
+      register: ssh_key
+      failed_when: not ssh_key.stat.exists
+
+    - name: Check claude-sandbox.sh is executable
+      ansible.builtin.stat:
+        path: ~/claude-sandbox.sh
+      register: sandbox_script
+      failed_when: not sandbox_script.stat.executable
+
+    - name: Check claude-attach.sh is executable
+      ansible.builtin.stat:
+        path: ~/claude-attach.sh
+      register: attach_script
+      failed_when: not attach_script.stat.executable
+
+    - name: Check required directories exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: dir_check
+      loop:
+        - ~/Repos
+        - ~/.claude-docker
+        - ~/.claude-docker/.ssh
+        - ~/.claude-control-plane
+        - ~/.claude-control-plane/workspace
+        - ~/tmux-control-plane
+        - ~/claude-sandbox-image
+      failed_when: not dir_check.stat.exists
+
+    - name: Check MCP server files exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: mcp_files
+      loop:
+        - ~/tmux-control-plane/server.js
+        - ~/tmux-control-plane/package.json
+        - ~/tmux-control-plane/start.sh
+        - ~/tmux-control-plane/node_modules
+      failed_when: not mcp_files.stat.exists
+
+    - name: Check config files exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: config_files
+      loop:
+        - ~/.tmux.conf
+        - ~/.claude-docker/settings.json
+        - ~/.claude-docker/.ssh/config
+        - ~/.claude-control-plane/workspace/.mcp.json
+      failed_when: not config_files.stat.exists
+
+    # =========================================================================
+    # OAuth Token Checks
+    # =========================================================================
+    - name: Check Claude OAuth credentials exist
+      ansible.builtin.stat:
+        path: ~/.claude-docker/.credentials.json
+      register: claude_creds
+      failed_when: not claude_creds.stat.exists
+
+    - name: Check Happy Coder tokens (optional)
+      ansible.builtin.stat:
+        path: ~/.claude-docker/.happy/access.key
+      register: happy_creds
+      failed_when: false  # Optional
+
+    # =========================================================================
+    # Optional Components
+    # =========================================================================
+    - name: Verify Tailscale is installed
+      ansible.builtin.command: which tailscale
+      register: tailscale_check
+      changed_when: false
+      failed_when: false  # Optional - don't fail if not installed
+
+    - name: Check Claude Code on host (optional)
+      ansible.builtin.shell: |
+        source ~/.nvm/nvm.sh
+        which claude || true
+      args:
+        executable: /bin/bash
+      register: claude_host
+      changed_when: false
+      failed_when: false
+
+    # =========================================================================
+    # Summary
+    # =========================================================================
+    - name: Report optional component status
+      ansible.builtin.debug:
+        msg: |
+          === OAuth Tokens ===
+          Claude credentials: {{ 'present' if claude_creds.stat.exists else 'MISSING' }}
+          Happy Coder tokens: {{ 'present' if happy_creds.stat.exists else 'not found (optional)' }}
+
+          === Optional Components ===
+          Tailscale: {{ 'installed' if tailscale_check.rc == 0 else 'not installed' }}
+          Claude Code on host: {{ 'installed' if claude_host.rc == 0 and claude_host.stdout != '' else 'not installed' }}
+          Node.js version: {{ node_version.stdout | trim }}
+          pnpm version: {{ pnpm_version.stdout | trim }}
+
+    - name: All verifications passed
+      ansible.builtin.debug:
+        msg: "Deployment verified successfully!"

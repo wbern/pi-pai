@@ -1,0 +1,34 @@
+# Gitleaks configuration for pi-pai
+# https://github.com/gitleaks/gitleaks
+
+title = "pi-pai secrets detection"
+
+[extend]
+useDefault = true
+
+# Additional rules for Ansible vault and common tokens
+[[rules]]
+id = "ansible-vault-password"
+description = "Ansible vault password in plain text"
+regex = '''(?i)(vault_pass|vault_password|ansible_vault)\s*[:=]\s*['"]?[^\s'"]+['"]?'''
+tags = ["ansible", "vault"]
+
+[[rules]]
+id = "tailscale-authkey"
+description = "Tailscale authentication key"
+regex = '''tskey-[a-zA-Z0-9]{32,}'''
+tags = ["tailscale", "auth"]
+
+[[rules]]
+id = "github-pat-fine-grained"
+description = "GitHub fine-grained personal access token"
+regex = '''github_pat_[a-zA-Z0-9]{22}_[a-zA-Z0-9]{59}'''
+tags = ["github", "token"]
+
+# Allowlist for files that intentionally contain placeholders
+[allowlist]
+description = "Allow placeholder files"
+paths = [
+  '''group_vars/all/vault\.yml$''',  # Contains placeholders like ghp_xxx...
+  '''\.gitleaks\.toml$''',            # This config file
+]

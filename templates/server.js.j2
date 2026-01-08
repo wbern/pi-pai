@@ -1,18 +1,26 @@
 import express from "express";
-import { execSync, exec } from "child_process";
+import { execFileSync, spawn } from "child_process";
 
 const app = express();
-const PORT = 3100;
-const BEARER_TOKEN = "tmux-local-dev";
+const PORT = {{ mcp_server_port }};
+const BEARER_TOKEN = "{{ mcp_bearer_token }}";
 
 app.use(express.json());
 
-function run(cmd) {
+// Safe shell execution using execFileSync (no shell interpolation)
+function run(cmd, args = []) {
   try {
-    return execSync(cmd, { encoding: "utf8", timeout: 30000 }).trim();
+    return execFileSync(cmd, args, { encoding: "utf8", timeout: 30000 }).trim();
   } catch (e) {
     throw new Error(e.stderr || e.message);
   }
+}
+
+// Validate input: alphanumeric, dash, underscore, dot, slash only
+function sanitize(str, allowSlash = false) {
+  if (!str) return "";
+  const pattern = allowSlash ? /[^a-zA-Z0-9\-_./@ ]/g : /[^a-zA-Z0-9\-_. ]/g;
+  return str.replace(pattern, "");
 }
 
 const TOOLS = [
@@ -61,7 +69,7 @@ const TOOLS = [
 const toolHandlers = {
   list_sessions: async () => {
     try {
-      const output = run(`tmux list-windows -t main -F "#{window_index}: #{window_name}"`);
+      const output = run("tmux", ["list-windows", "-t", "{{ tmux_session_name }}", "-F", "#{window_index}: #{window_name}"]);
       return { content: [{ type: "text", text: output || "No windows found" }] };
     } catch (e) {
       return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
@@ -69,40 +77,46 @@ const toolHandlers = {
   },
 
   spawn_session: async ({ repo, instruction, window_name }) => {
+    // Sanitize inputs to prevent injection
+    const safeRepo = sanitize(repo, true);  // allow slashes for URLs
+    const safeInstruction = instruction ? instruction.substring(0, 500) : "";  // limit length
+
     // Build prompt based on inputs
     let prompt = "";
-    if (repo && instruction) {
-      prompt = `Clone ${repo}, then ${instruction}`;
-    } else if (repo) {
-      prompt = `Clone ${repo} and explore the codebase`;
-    } else if (instruction) {
-      prompt = instruction;
+    if (safeRepo && safeInstruction) {
+      prompt = `Clone ${safeRepo}, then ${safeInstruction}`;
+    } else if (safeRepo) {
+      prompt = `Clone ${safeRepo} and explore the codebase`;
+    } else if (safeInstruction) {
+      prompt = safeInstruction;
     }
-    // else blank session
 
-    // Determine window name
-    let windowName = window_name;
+    // Determine window name (sanitized)
+    let windowName = sanitize(window_name);
     if (!windowName) {
-      if (repo) {
-        windowName = repo.split("/").pop().replace(".git", "");
+      if (safeRepo) {
+        windowName = sanitize(safeRepo.split("/").pop().replace(".git", ""));
       } else {
         windowName = `session-${Date.now()}`;
       }
     }
 
-    // Escape for shell
-    const escapedPrompt = prompt.replace(/'/g, "'\\''");
-    const escapedWindow = windowName.replace(/'/g, "'\\''");
-
-    // Use bash -l for login shell (loads docker group, nvm, PATH, etc.)
-    const cmd = `bash -l -c '${process.env.HOME}/claude-sandbox.sh --spawn "${escapedPrompt}" "${escapedWindow}"'`;
-
     try {
+      // Use spawn with array arguments (no shell interpolation)
       const result = await new Promise((resolve, reject) => {
-        exec(cmd, { timeout: 600000 }, (err, stdout, stderr) => {
-          if (err) reject(new Error(stderr || err.message));
+        const child = spawn(
+          `${process.env.HOME}/claude-sandbox.sh`,
+          ["--spawn", prompt, windowName],
+          { timeout: 600000, shell: false }
+        );
+        let stdout = "", stderr = "";
+        child.stdout.on("data", d => stdout += d);
+        child.stderr.on("data", d => stderr += d);
+        child.on("close", code => {
+          if (code !== 0) reject(new Error(stderr || `Exit code ${code}`));
           else resolve(stdout);
         });
+        child.on("error", reject);
       });
       console.log("Spawned:", result);
       return { content: [{ type: "text", text: `Spawned "${windowName}". Use list_sessions to see all windows.` }] };
@@ -113,21 +127,21 @@ const toolHandlers = {
   },
 
   kill_session: async ({ target }) => {
+    const safeTarget = sanitize(target);
+    if (!safeTarget) {
+      return { content: [{ type: "text", text: "Error: Invalid target" }], isError: true };
+    }
     try {
-      run(`tmux kill-window -t "main:${target}"`);
-      return { content: [{ type: "text", text: `Killed window: ${target}` }] };
+      run("tmux", ["kill-window", "-t", `{{ tmux_session_name }}:${safeTarget}`]);
+      return { content: [{ type: "text", text: `Killed window: ${safeTarget}` }] };
     } catch (e) {
       return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
     }
   },
 
+  // Alias for kill_session (same functionality, different API)
   end_session: async ({ window }) => {
-    try {
-      run(`tmux kill-window -t "main:${window}"`);
-      return { content: [{ type: "text", text: `Session "${window}" ended.` }] };
-    } catch (e) {
-      return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
-    }
+    return toolHandlers.kill_session({ target: window });
   }
 };
 

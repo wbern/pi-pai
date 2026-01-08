@@ -6,7 +6,7 @@ run_project() {
     local prompt="$1"
     docker run -it --rm \
         --init \
-        --memory 3g \
+        --memory {{ docker_memory_limit }} \
         --add-host=host.docker.internal:host-gateway \
         -v ~/Repos:/workspace \
         -v ~/.claude-docker:/home/node/.claude \
@@ -33,7 +33,7 @@ fi
 if [[ -z "$1" ]]; then
     docker run -it --rm \
         --init \
-        --memory 3g \
+        --memory {{ docker_memory_limit }} \
         --add-host=host.docker.internal:host-gateway \
         -v ~/.claude-control-plane/workspace:/workspace \
         -v ~/.claude-docker:/home/node/.claude \
@@ -50,11 +50,13 @@ if [[ -z "$1" ]]; then
 fi
 
 # --spawn "prompt" "window_name": MCP entry point for spawning sessions
+# Note: Prompt is sanitized by MCP server (server.js) before reaching here
+# Single quotes are escaped; complex chars (newlines, backticks) may not work
 if [[ "$1" == "--spawn" ]]; then
     PROMPT="$2"
     WINDOW_NAME="${3:-session-$(date +%s)}"
     ESCAPED="${PROMPT//\'/\'\\\'\'}"
-    tmux new-window -t main: -n "$WINDOW_NAME" \
+    tmux new-window -t {{ tmux_session_name }}: -n "$WINDOW_NAME" \
         "$HOME/claude-sandbox.sh --run '$ESCAPED'"
     echo "Spawned window '$WINDOW_NAME'"
     exit 0

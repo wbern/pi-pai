@@ -8,9 +8,60 @@
 
   vars:
     # Override in group_vars/all/vars.yml
-    pi_home: "{{ ansible_env.HOME }}"
+    pi_home: "/home/{{ pi_user }}"
 
   tasks:
+    # =========================================================================
+    # Variable Validation
+    # =========================================================================
+    - name: Validate required variables are set
+      ansible.builtin.assert:
+        that:
+          - pi_host is defined and pi_host != "YOUR_PI_HOST"
+          - pi_user is defined and pi_user | length > 0
+          - repos_dir is defined
+          - claude_docker_dir is defined
+          - docker_image_name is defined
+          - tmux_session_name is defined
+        fail_msg: |
+          Required variables are not configured!
+          Please edit group_vars/all/vars.yml and set:
+            - pi_host: Your Pi's hostname or IP (e.g., "claude-pi.local")
+            - pi_user: Your Pi username
+          See README.md for setup instructions.
+        success_msg: "All required variables are configured"
+      tags: [always]
+
+    # =========================================================================
+    # OAuth Token Validation (local check)
+    # =========================================================================
+    - name: Check for Claude OAuth tokens locally
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/.tokens/.claude"
+      delegate_to: localhost
+      register: local_claude_tokens
+      tags: [always, tokens]
+
+    - name: Fail if Claude OAuth tokens not found
+      ansible.builtin.fail:
+        msg: |
+          Claude OAuth tokens not found at .tokens/.claude/
+
+          To fix this, authenticate locally first:
+            1. make auth     # Run Claude/happy to complete OAuth
+            2. make copy-tokens  # Copy tokens to .tokens/
+
+          Then run deployment again.
+      when: not local_claude_tokens.stat.exists
+      tags: [always, tokens]
+
+    - name: Check for Happy Coder tokens locally
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/.tokens/.happy"
+      delegate_to: localhost
+      register: local_happy_tokens
+      tags: [always, tokens]
+
     # =========================================================================
     # Prerequisites
     # =========================================================================
@@ -40,6 +91,71 @@
       tags: [performance]
 
     # =========================================================================
+    # Optional Cleanup (saves ~200MB RAM)
+    # =========================================================================
+    - name: Check if snapd is installed
+      ansible.builtin.command: dpkg -l snapd
+      register: snapd_check
+      changed_when: false
+      failed_when: false
+      tags: [cleanup, never]
+
+    - name: Remove snapd (optional - saves memory)
+      become: true
+      ansible.builtin.apt:
+        name: snapd
+        state: absent
+        purge: true
+      when: snapd_check.rc == 0
+      tags: [cleanup, never]
+
+    - name: Remove snap directories
+      become: true
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /snap
+        - /var/snap
+        - /var/lib/snapd
+      when: snapd_check.rc == 0
+      tags: [cleanup, never]
+
+    # =========================================================================
+    # Tailscale
+    # =========================================================================
+    - name: Check if Tailscale is installed
+      ansible.builtin.command: tailscale --version
+      register: tailscale_check
+      changed_when: false
+      failed_when: false
+      tags: [tailscale]
+
+    - name: Install Tailscale
+      become: true
+      # Official install script - see https://tailscale.com/download/linux
+      # Alternative: Add apt repo manually for production environments
+      ansible.builtin.shell: curl -fsSL https://tailscale.com/install.sh | sh
+      when: tailscale_check.rc != 0
+      tags: [tailscale]
+
+    - name: Check Tailscale status
+      ansible.builtin.command: tailscale status
+      register: tailscale_status
+      changed_when: false
+      failed_when: false
+      when: vault_tailscale_authkey is defined and vault_tailscale_authkey != ""
+      tags: [tailscale]
+
+    - name: Authenticate Tailscale
+      become: true
+      ansible.builtin.command: tailscale up --authkey={{ vault_tailscale_authkey }}
+      when:
+        - vault_tailscale_authkey is defined and vault_tailscale_authkey != ""
+        - tailscale_status.rc != 0 or 'Logged out' in tailscale_status.stdout
+      tags: [tailscale]
+
+    # =========================================================================
     # Docker
     # =========================================================================
     - name: Check if Docker is installed
@@ -51,6 +167,8 @@
 
     - name: Install Docker
       become: true
+      # Official convenience script - see https://docs.docker.com/engine/install/
+      # Alternative: Add apt repo manually for production environments
       ansible.builtin.shell: curl -fsSL https://get.docker.com | sh
       when: docker_check.rc != 0
       tags: [docker]
@@ -61,6 +179,10 @@
         name: "{{ ansible_user }}"
         groups: docker
         append: true
+      tags: [docker]
+
+    - name: Reset connection to pick up docker group
+      ansible.builtin.meta: reset_connection
       tags: [docker]
 
     # =========================================================================
@@ -78,12 +200,35 @@
       when: not nvm_check.stat.exists
       tags: [nodejs]
 
+    - name: Check if Node.js is installed
+      ansible.builtin.shell: |
+        source {{ pi_home }}/.nvm/nvm.sh
+        node --version
+      args:
+        executable: /bin/bash
+      register: node_check
+      changed_when: false
+      failed_when: false
+      tags: [nodejs]
+
     - name: Install Node.js LTS via nvm
       ansible.builtin.shell: |
         source {{ pi_home }}/.nvm/nvm.sh
         nvm install --lts
       args:
         executable: /bin/bash
+      when: node_check.rc != 0
+      tags: [nodejs]
+
+    - name: Check if pnpm is installed
+      ansible.builtin.shell: |
+        source {{ pi_home }}/.nvm/nvm.sh
+        pnpm --version
+      args:
+        executable: /bin/bash
+      register: pnpm_check
+      changed_when: false
+      failed_when: false
       tags: [nodejs]
 
     - name: Install pnpm via corepack
@@ -93,6 +238,7 @@
         corepack prepare pnpm@latest --activate
       args:
         executable: /bin/bash
+      when: pnpm_check.rc != 0
       tags: [nodejs]
 
     # =========================================================================
@@ -147,17 +293,83 @@
       tags: [configs]
 
     # =========================================================================
+    # OAuth Tokens (from local .tokens/)
+    # =========================================================================
+    - name: Copy Claude OAuth tokens to Pi
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/.tokens/.claude/"
+        dest: "{{ claude_docker_dir }}/"
+        mode: preserve
+      tags: [tokens]
+
+    - name: Copy Happy Coder tokens to Pi
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/.tokens/.happy/"
+        dest: "{{ claude_docker_dir }}/.happy/"
+        mode: preserve
+      when: local_happy_tokens.stat.exists
+      tags: [tokens]
+
+    - name: Report token deployment status
+      ansible.builtin.debug:
+        msg: |
+          Claude tokens: deployed to {{ claude_docker_dir }}/
+          Happy tokens: {{ 'deployed' if local_happy_tokens.stat.exists else 'not found (optional)' }}
+      tags: [tokens]
+
+    # =========================================================================
+    # SSH Key for Git (Docker)
+    # =========================================================================
+    - name: Generate SSH key for Docker git access
+      ansible.builtin.command:
+        cmd: ssh-keygen -t ed25519 -C "claude-pi" -f {{ claude_docker_dir }}/.ssh/id_ed25519 -N ""
+        creates: "{{ claude_docker_dir }}/.ssh/id_ed25519"
+      tags: [ssh-key]
+
+    - name: Read SSH public key
+      ansible.builtin.slurp:
+        src: "{{ claude_docker_dir }}/.ssh/id_ed25519.pub"
+      register: ssh_pubkey
+      tags: [ssh-key]
+
+    - name: Add SSH key to GitHub
+      ansible.builtin.uri:
+        url: https://api.github.com/user/keys
+        method: POST
+        headers:
+          Authorization: "Bearer {{ vault_github_pat }}"
+          Accept: "application/vnd.github+json"
+        body_format: json
+        body:
+          title: "claude-pi-{{ ansible_date_time.date }}"
+          key: "{{ ssh_pubkey.content | b64decode | trim }}"
+        status_code: [201, 422]  # 422 = key already exists
+      when: >-
+        vault_github_pat is defined and
+        vault_github_pat | length > 10 and
+        vault_github_pat != 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+      tags: [ssh-key]
+
+    # =========================================================================
     # Scripts
     # =========================================================================
-    - name: Deploy scripts
+    - name: Deploy static scripts
       ansible.builtin.copy:
         src: "files/scripts/{{ item }}"
         dest: "{{ pi_home }}/{{ item }}"
         mode: '0755'
       loop:
-        - claude-sandbox.sh
         - upgrade-claude.sh
         - claude-sandbox-shell.sh
+      tags: [scripts]
+
+    - name: Deploy templated scripts
+      ansible.builtin.template:
+        src: "templates/{{ item }}.j2"
+        dest: "{{ pi_home }}/{{ item }}"
+        mode: '0755'
+      loop:
+        - claude-sandbox.sh
         - claude-attach.sh
       tags: [scripts]
 
@@ -206,15 +418,27 @@
     # =========================================================================
     # MCP Server
     # =========================================================================
-    - name: Deploy MCP server files
+    - name: Deploy MCP server static files
       ansible.builtin.copy:
         src: "files/mcp-server/{{ item }}"
         dest: "{{ mcp_server_dir }}/{{ item }}"
         mode: "{{ '0755' if item == 'start.sh' else '0644' }}"
       loop:
         - package.json
-        - server.js
         - start.sh
+      tags: [mcp]
+
+    - name: Deploy MCP server.js from template
+      ansible.builtin.template:
+        src: templates/server.js.j2
+        dest: "{{ mcp_server_dir }}/server.js"
+        mode: '0644'
+      tags: [mcp]
+
+    - name: Check if MCP server dependencies installed
+      ansible.builtin.stat:
+        path: "{{ mcp_server_dir }}/node_modules"
+      register: mcp_node_modules
       tags: [mcp]
 
     - name: Install MCP server dependencies
@@ -224,6 +448,7 @@
         pnpm install
       args:
         executable: /bin/bash
+      when: not mcp_node_modules.stat.exists
       tags: [mcp]
 
     - name: Deploy control plane MCP config
@@ -243,6 +468,7 @@
         mode: '0600'
       when: vault_github_pat is defined and vault_github_pat != ""
       no_log: true
+      diff: false
       tags: [secrets]
 
     - name: Store Context7 token
@@ -252,6 +478,7 @@
         mode: '0600'
       when: vault_context7_token is defined and vault_context7_token != ""
       no_log: true
+      diff: false
       tags: [secrets]
 
     # =========================================================================
@@ -263,14 +490,24 @@
       changed_when: false
       tags: [systemd]
 
-    - name: Deploy systemd services
+    - name: Deploy static systemd services
       ansible.builtin.copy:
         src: "files/systemd/{{ item }}"
         dest: "{{ pi_home }}/.config/systemd/user/{{ item }}"
         mode: '0644'
       loop:
-        - claude-tmux.service
         - tmux-control-plane.service
+      notify:
+        - Reload systemd
+      tags: [systemd]
+
+    - name: Deploy templated systemd services
+      ansible.builtin.template:
+        src: "templates/{{ item }}.j2"
+        dest: "{{ pi_home }}/.config/systemd/user/{{ item }}"
+        mode: '0644'
+      loop:
+        - claude-tmux.service
       notify:
         - Reload systemd
       tags: [systemd]
