@@ -45,6 +45,38 @@
       failed_when: tmux_session.rc != 0
 
     # =========================================================================
+    # Service Restart Tests (verifies handlers work correctly)
+    # =========================================================================
+    - name: Test tmux-control-plane can restart
+      ansible.builtin.systemd:
+        name: tmux-control-plane
+        state: restarted
+        scope: user
+
+    - name: Wait for MCP server to be ready after restart
+      ansible.builtin.uri:
+        url: http://localhost:3100/health
+        return_content: true
+      register: health_after_restart
+      until: "'ok' in health_after_restart.content"
+      retries: 10
+      delay: 2
+
+    - name: Test claude-tmux can restart
+      ansible.builtin.systemd:
+        name: claude-tmux
+        state: restarted
+        scope: user
+
+    - name: Wait for tmux session after restart
+      ansible.builtin.command: tmux has-session -t main
+      register: tmux_after_restart
+      until: tmux_after_restart.rc == 0
+      retries: 10
+      delay: 2
+      changed_when: false
+
+    # =========================================================================
     # Docker Checks
     # =========================================================================
     - name: Check Docker is installed

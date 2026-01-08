@@ -18,8 +18,9 @@ pi-pai/
 │   ├── hosts.yml            # Pi host definition (uses vars from group_vars)
 │   └── test.yml             # Local VM testing inventory
 ├── group_vars/all/
-│   ├── vars.yml             # Configuration variables (edit this)
-│   └── vault.yml            # Secrets template (encrypt with ansible-vault)
+│   ├── vars.yml             # Configuration defaults
+│   ├── vault.yml            # Secrets template (encrypt with ansible-vault)
+│   └── zzz_local.yml        # Your overrides (create this, gitignored)
 ├── files/
 │   ├── scripts/             # Static shell scripts (upgrade-claude.sh, etc.)
 │   ├── systemd/             # Static systemd services
@@ -35,6 +36,8 @@ pi-pai/
 ├── molecule/default/        # Molecule test scenario (OrbStack)
 ├── scripts/                 # Development scripts (pre-commit, setup-hooks)
 ├── docs/                    # Project documentation
+├── .github/workflows/       # GitHub Actions CI
+├── .ansible-lint            # Ansible-lint configuration
 └── Makefile                 # Common commands
 ```
 
@@ -72,7 +75,7 @@ pi-pai/
 │  ┌──────────────────────┐                                      │
 │  │ tmux session: main   │                                      │
 │  │                      │                                      │
-│  │ window 1: main       │ ◀── Control plane (systemd starts)   │
+│  │ window 1: ctrl       │ ◀── Control plane (systemd starts)   │
 │  │ window 2: portfolio  │ ◀── Project session (MCP spawned)    │
 │  │ window 3: research   │ ◀── Project session (MCP spawned)    │
 │  └──────────────────────┘                                      │
@@ -127,25 +130,26 @@ Window names auto-generate from repo name or timestamp if not provided.
 - All configs extracted
 - Systemd services (user scope, with lingering enabled)
 - MCP server with spawn/list/kill/end tools
-- Main playbook with tagged tasks
+- Main playbook with tagged tasks (idempotent)
 - Templates for variable substitution
 - README with usage instructions
+- Tailscale auto-setup with authkey
+- SSH key generation and GitHub upload via API
+- OAuth token deployment from local machine
+- GitHub Actions CI (lint, secrets scan, syntax check)
+- Molecule testing with OrbStack
+- Tested on Raspberry Pi 4
 
-**Not Yet Done:**
-- [x] ~~Tailscale installation task~~ (now automated with authkey)
-- [x] ~~SSH key generation task for Docker~~ (now automated)
-- [x] ~~SSH key upload to GitHub~~ (now automated via API)
-- [ ] GitHub MCP auto-setup (manual post-deploy)
-- [ ] Testing against actual Pi
-- [ ] Idempotency verification
-- [ ] Removing snapd task (optional cleanup)
+**Manual post-deploy:**
+- GitHub MCP setup (one-time `claude mcp add` command)
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `playbook.yml` | Main entry point - all tasks with tags |
-| `group_vars/all/vars.yml` | **Edit first** - Pi host, username, paths |
+| `group_vars/all/vars.yml` | Default configuration (don't edit - use zzz_local.yml) |
+| `group_vars/all/zzz_local.yml` | **Create this** - Your Pi host, username overrides |
 | `group_vars/all/vault.yml` | **Encrypt** - GitHub PAT, Tailscale authkey, Context7 token |
 | `templates/claude-sandbox.sh.j2` | Main launcher - routes to control plane or project session |
 | `templates/server.js.j2` | MCP server template (uses vars for port/token/session name) |
@@ -157,16 +161,22 @@ Window names auto-generate from repo name or timestamp if not provided.
 ```bash
 # Prerequisites on Mac
 brew install ansible
-echo "your-vault-password" > ~/.vault_pass && chmod 600 ~/.vault_pass
+npm install -g @anthropic-ai/claude-code happy-coder
+
+# Setup and authenticate
+make setup        # Install git hooks
+make auth         # Complete OAuth flows
+make copy-tokens  # Export to .tokens/
+
+# Encrypt vault (required)
+ansible-vault encrypt group_vars/all/vault.yml
 
 # Full deployment
-ansible-playbook playbook.yml --ask-vault-pass
+make deploy       # Or: ansible-playbook playbook.yml --ask-vault-pass --ask-become-pass
 
 # Specific tags
-ansible-playbook playbook.yml --tags scripts
-ansible-playbook playbook.yml --tags docker
-ansible-playbook playbook.yml --tags mcp
-ansible-playbook playbook.yml --tags systemd
+ansible-playbook playbook.yml --ask-vault-pass --ask-become-pass --tags docker
+ansible-playbook playbook.yml --ask-vault-pass --ask-become-pass --tags mcp
 ```
 
 ## Post-Deployment Manual Steps
@@ -184,8 +194,10 @@ OAuth tokens are now copied automatically during deployment (from `.tokens/` on 
 2. **Add GitHub MCP (from within Claude session):**
    ```bash
    # Press ! for bash shell
-   claude mcp add -t http github https://api.githubcopilot.com/mcp \
-     -H "Authorization: Bearer \${GITHUB_PAT}"
+   claude mcp add github \
+     --transport http \
+     --url https://api.githubcopilot.com/mcp/ \
+     --header "Authorization: Bearer \${GITHUB_PAT}"
    # exit back to Claude, /mcp to verify
    ```
 
@@ -206,19 +218,6 @@ OAuth tokens are now copied automatically during deployment (from `.tokens/` on 
 
 5. **EXDEV errors** - Claude Code plugin installs fail if /tmp is different filesystem. We set `TMPDIR=/home/node/.claude/tmp`
 
-## Source Article Sync
-
-This playbook extracts from the article at:
-```
-KenDev-AB/portfolio/apps/kendev-site/src/content/articles/raspberry-pi-claude-server.md
-```
-
-The article is the source of truth. If it's updated, sync changes here. Key sections:
-- Docker setup (line ~248)
-- Scripts (claude-sandbox.sh at line ~849)
-- MCP server (line ~1035)
-- Systemd services (line ~396, ~1244)
-
 ## Testing
 
 Manual verification after deployment:
@@ -237,7 +236,7 @@ tmux ls                                # Should show "main" session
 
 ## Related
 
-- **Source article:** `KenDev-AB/portfolio` → `apps/kendev-site/src/content/articles/raspberry-pi-claude-server.md`
-- **This repo:** `KenDev-AB/pi-pai`
+- **Source article:** [Claude Code In My Pocket](https://kendev.se/articles/raspberry-pi-claude-server)
+- **This repo:** [KenDev-AB/pi-pai](https://github.com/KenDev-AB/pi-pai)
 - **happy-coder:** https://happy.engineering (mobile access)
-- **Claude Code docs:** https://code.claude.com/docs
+- **Claude Code docs:** https://docs.anthropic.com/en/docs/claude-code

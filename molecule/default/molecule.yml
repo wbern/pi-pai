@@ -17,6 +17,9 @@ platforms:
 
 provisioner:
   name: ansible
+  config_options:
+    defaults:
+      vault_password_file: ${ANSIBLE_VAULT_PASSWORD_FILE:-}
   playbooks:
     create: create.yml
     converge: ../../playbook.yml

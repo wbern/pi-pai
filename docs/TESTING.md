@@ -2,6 +2,8 @@
 
 This guide walks through testing the Ansible playbook against a virtual Pi using OrbStack.
 
+> **Note:** CI runs automatically on every PR via GitHub Actions (lint, secrets scan, syntax check).
+
 ## Prerequisites
 
 - macOS with Apple Silicon (or Intel)
@@ -48,7 +50,7 @@ In OrbStack UI:
 
 Or via CLI:
 ```bash
-orb create ubuntu:24.04 pi-test
+orb create ubuntu:24.04 ubuntu
 ```
 
 ## Step 3: Get VM info
@@ -98,20 +100,34 @@ ansible -i inventory/test.yml pi -m ping
 
 Expected output: `pi | SUCCESS => { ... "ping": "pong" }`
 
-## Step 6: Run the playbook
+## Step 6: Encrypt the vault (if not already)
+
+Before running the playbook, you must encrypt `group_vars/all/vault.yml`:
+
+```bash
+# Edit with your tokens (or leave placeholders for testing)
+nano group_vars/all/vault.yml
+
+# Encrypt it (choose a password you'll remember)
+ansible-vault encrypt group_vars/all/vault.yml
+```
+
+## Step 7: Run the playbook
 
 ```bash
 make test
 ```
 
+You'll be prompted for the vault password you chose in Step 6.
+
 Or explicitly:
 ```bash
-ansible-playbook -i inventory/test.yml playbook.yml
+ansible-playbook -i inventory/test.yml playbook.yml --ask-vault-pass
 ```
 
 Expected: All tasks complete with `failed=0`.
 
-## Step 7: Verify deployment
+## Step 8: Verify deployment
 
 Run these checks to verify the deployment:
 
@@ -145,7 +161,7 @@ ssh ubuntu.orb.local 'ls -d ~/Repos ~/.claude-docker ~/.claude-control-plane ~/t
 # Expected: 4
 ```
 
-**Note:** `claude-tmux` requires OAuth tokens. If tokens weren't copied during deployment, the service will restart continuously. See [OAuth Token Setup](#oauth-token-setup-required).
+**Note:** `make test` and `make deploy` will fail if OAuth tokens aren't in `.tokens/`. See [OAuth Token Setup](#oauth-token-setup-required).
 
 ## Resetting the VM
 
@@ -164,7 +180,7 @@ ssh-keygen -R ubuntu.orb.local
 
 OAuth tokens from Claude Code and happy-coder are account-bound, not machine-bound. You authenticate locally, then tokens are copied to the Pi/VM during deployment.
 
-### Step 1: Authenticate locally
+### Authenticate locally
 
 ```bash
 make auth
@@ -176,31 +192,39 @@ npm install -g @anthropic-ai/claude-code
 npm install -g happy-coder
 ```
 
-### Step 2: Copy tokens to .tokens/
+### Copy tokens
 
 ```bash
 make copy-tokens
 ```
 
 This copies:
-- `~/.claude/` → `.tokens/.claude/` (Claude Code credentials)
+- macOS Keychain → `.tokens/.claude/` (Claude Code credentials)
 - `~/.happy/` → `.tokens/.happy/` (happy-coder credentials)
 
 The `.tokens/` directory is gitignored and claudeignored for security.
 
-### Step 3: Run molecule test
+### Verify tokens
 
 ```bash
-make test       # Uses molecule to test deployment
+ls .tokens/.claude/.credentials.json .tokens/.happy/access.key
+# Both files should exist
 ```
 
-Or use molecule directly:
+### Run the test
+
+```bash
+make test       # Deploy to OrbStack VM
+```
+
+Or use molecule for full lifecycle:
 ```bash
 make converge   # Run playbook on existing VM
 make verify     # Run verification checks
+make test-full  # Full cycle: create → converge → verify → destroy
 ```
 
-The playbook automatically copies tokens from `.tokens/` to the target during the converge phase. Deployment will fail if `.tokens/.claude` is missing.
+The playbook automatically copies tokens from `.tokens/` to the target. Both `make deploy` and `make test` check for tokens and will fail early with a helpful error if missing.
 
 ### Token Security Notes
 
@@ -212,5 +236,6 @@ The playbook automatically copies tokens from `.tokens/` to the target during th
 ## Notes
 
 - Test inventory is at `inventory/test.yml` (uses your Mac username and default SSH key)
-- The vault file has placeholder values - fine for testing
+- Vault must be encrypted before running tests (placeholder values are fine)
+- For molecule tests, set `ANSIBLE_VAULT_PASSWORD_FILE=~/.vault_pass` to avoid password prompts
 - OrbStack is free for personal use (Pro trial banner is for team features)

@@ -1,0 +1,26 @@
+---
+# Ansible-lint configuration
+# https://ansible.readthedocs.io/projects/lint/configuring/
+
+profile: production
+
+# Paths to exclude from linting
+exclude_paths:
+  - .github/
+  - molecule/default/create.yml
+  - molecule/default/destroy.yml
+
+# Skip these rules
+skip_list:
+  - name[template]  # Allow Jinja2 in task names for dynamic naming
+
+# Treat these as warnings, not errors
+warn_list:
+  - experimental
+  - role-name  # Not using roles in this project
+
+# Enable offline mode for faster runs (no galaxy dependencies)
+offline: false
+
+# Use verbose output
+# verbosity: 1

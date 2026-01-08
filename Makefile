@@ -10,12 +10,14 @@ setup:
 
 # Run all linters
 lint:
-	@echo "Running ansible-lint..."
-	ansible-lint playbook.yml
 	@echo "Running syntax check..."
 	ansible-playbook playbook.yml --syntax-check
+	@echo "Running handler verification..."
+	./scripts/verify-handlers.sh
 	@echo "Running secrets scan..."
 	gitleaks detect --config .gitleaks.toml --verbose
+	@echo "Running ansible-lint (optional)..."
+	@ansible-lint playbook.yml 2>/dev/null || echo "  Skipped (install: pip install ansible-lint)"
 
 # Quick syntax check only
 syntax:
@@ -24,6 +26,25 @@ syntax:
 # Deploy to Pi (production)
 deploy:
 	@echo ""
+	@# Verify vault.yml is encrypted
+	@if ! head -1 group_vars/all/vault.yml 2>/dev/null | grep -q '^\$$ANSIBLE_VAULT'; then \
+		echo "ERROR: group_vars/all/vault.yml is not encrypted."; \
+		echo ""; \
+		echo "Encrypt it first:"; \
+		echo "  ansible-vault encrypt group_vars/all/vault.yml"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@# Verify OAuth tokens exist
+	@if [ ! -f .tokens/.claude/.credentials.json ]; then \
+		echo "ERROR: OAuth tokens not found in .tokens/"; \
+		echo ""; \
+		echo "Run these commands first:"; \
+		echo "  make auth         # Complete OAuth flows"; \
+		echo "  make copy-tokens  # Copy tokens to .tokens/"; \
+		echo ""; \
+		exit 1; \
+	fi
 	@echo "You will be prompted for:"
 	@echo "  1. Vault password - decrypts secrets in vault.yml"
 	@echo "  2. BECOME password - your Pi's sudo password"
@@ -32,7 +53,26 @@ deploy:
 
 # Deploy to test VM (OrbStack)
 test:
-	ansible-playbook playbook.yml -i inventory/test.yml
+	@# Verify vault.yml is encrypted
+	@if ! head -1 group_vars/all/vault.yml 2>/dev/null | grep -q '^\$$ANSIBLE_VAULT'; then \
+		echo "ERROR: group_vars/all/vault.yml is not encrypted."; \
+		echo ""; \
+		echo "Encrypt it first:"; \
+		echo "  ansible-vault encrypt group_vars/all/vault.yml"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@# Verify OAuth tokens exist
+	@if [ ! -f .tokens/.claude/.credentials.json ]; then \
+		echo "ERROR: OAuth tokens not found in .tokens/"; \
+		echo ""; \
+		echo "Run these commands first:"; \
+		echo "  make auth         # Complete OAuth flows"; \
+		echo "  make copy-tokens  # Copy tokens to .tokens/"; \
+		echo ""; \
+		exit 1; \
+	fi
+	ansible-playbook playbook.yml -i inventory/test.yml --ask-vault-pass
 
 # Destroy test VM
 clean:

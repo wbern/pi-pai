@@ -9,9 +9,9 @@ Ansible playbook deploying an autonomous Claude Code server on Raspberry Pi 4. B
 ## Quick Commands
 
 ```bash
-make lint        # ansible-lint + syntax check + gitleaks
-make test        # Deploy to OrbStack VM (quick iteration)
-make deploy      # Deploy to Pi (prompts for vault password)
+make lint        # Syntax check + handler verification + secrets scan
+make test        # Deploy to OrbStack VM (requires vault + tokens)
+make deploy      # Deploy to Pi (requires vault + tokens, prompts for sudo)
 make auth        # OAuth flow for claude + happy
 make copy-tokens # Export tokens for deployment
 ```
@@ -33,9 +33,10 @@ make copy-tokens # Export tokens for deployment
 
 ### Testing
 
-- Use `make test` for OrbStack VM testing (no vault password needed)
+- Use `make test` for OrbStack VM testing (requires encrypted vault + tokens)
 - Use `make test-full` for full Molecule lifecycle
 - Verify with `make verify` after converge
+- CI runs on every PR via GitHub Actions (lint, secrets scan, syntax check)
 
 ## Architecture
 
@@ -51,10 +52,10 @@ make copy-tokens # Export tokens for deployment
 │  │ - No SSH    │  │ - SSH keys  │      │
 │  │ - MCP tools │  │ - Git access│      │
 │  └──────┬──────┘  └─────────────┘      │
-│         │ HTTP :3100                    │
+│         │ HTTP localhost:3100           │
 │         ▼                               │
 │  ┌─────────────┐                       │
-│  │ MCP Server  │ spawn/list/kill       │
+│  │ MCP Server  │ spawn/list/kill/end   │
 │  └─────────────┘                       │
 │         │                               │
 │         ▼                               │
@@ -68,8 +69,9 @@ make copy-tokens # Export tokens for deployment
 
 - `templates/` - Jinja2 templates (use variables from group_vars)
 - `files/` - Static files copied as-is
-- `group_vars/all/vars.yml` - Configuration (edit this)
+- `group_vars/all/vars.yml` - Configuration defaults
 - `group_vars/all/vault.yml` - Secrets (encrypt with ansible-vault)
+- `group_vars/all/zzz_local.yml` - Your overrides (create this, gitignored)
 
 ## Common Pitfalls
 

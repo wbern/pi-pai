@@ -371,6 +371,7 @@
       loop:
         - claude-sandbox.sh
         - claude-attach.sh
+      notify: Restart claude-tmux
       tags: [scripts]
 
     # =========================================================================
@@ -426,6 +427,7 @@
       loop:
         - package.json
         - start.sh
+      notify: Restart tmux-control-plane
       tags: [mcp]
 
     - name: Deploy MCP server.js from template
@@ -433,6 +435,7 @@
         src: templates/server.js.j2
         dest: "{{ mcp_server_dir }}/server.js"
         mode: '0644'
+      notify: Restart tmux-control-plane
       tags: [mcp]
 
     - name: Check if MCP server dependencies installed
@@ -456,6 +459,7 @@
         src: templates/mcp.json.j2
         dest: "{{ control_plane_dir }}/workspace/.mcp.json"
         mode: '0644'
+      notify: Restart claude-tmux
       tags: [mcp]
 
     # =========================================================================
@@ -499,6 +503,7 @@
         - tmux-control-plane.service
       notify:
         - Reload systemd
+        - Restart tmux-control-plane
       tags: [systemd]
 
     - name: Deploy templated systemd services
@@ -510,6 +515,7 @@
         - claude-tmux.service
       notify:
         - Reload systemd
+        - Restart claude-tmux
       tags: [systemd]
 
     - name: Enable and start services
@@ -580,4 +586,16 @@
     - name: Reload systemd
       ansible.builtin.systemd:
         daemon_reload: true
+        scope: user
+
+    - name: Restart tmux-control-plane
+      ansible.builtin.systemd:
+        name: tmux-control-plane
+        state: restarted
+        scope: user
+
+    - name: Restart claude-tmux
+      ansible.builtin.systemd:
+        name: claude-tmux
+        state: restarted
         scope: user
