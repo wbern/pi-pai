@@ -2,16 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { sanitize, buildPrompt, generateWindowName, generateSessionDir } from '../lib.js';
 
 describe('sanitize', () => {
-  it('returns empty string for null input', () => {
-    expect(sanitize(null)).toBe("");
-  });
-
-  it('returns empty string for undefined input', () => {
-    expect(sanitize(undefined)).toBe("");
-  });
-
-  it('returns empty string for empty string input', () => {
-    expect(sanitize("")).toBe("");
+  it.each([null, undefined, ""])('returns empty string for falsy input: %s', (input) => {
+    expect(sanitize(input)).toBe("");
   });
 
   it('allows alphanumeric characters', () => {
@@ -32,6 +24,12 @@ describe('sanitize', () => {
 
   it('removes quotes', () => {
     expect(sanitize(`"hello" 'world'`)).toBe("hello world");
+  });
+
+  it('output only contains allowed characters', () => {
+    const dangerous = "test;`$()'\"|\\&><*?#\n\t";
+    const result = sanitize(dangerous);
+    expect(result).toMatch(/^[a-zA-Z0-9\-_. ]*$/);
   });
 
   describe('with allowSlash=true', () => {
@@ -124,12 +122,8 @@ describe('generateWindowName', () => {
 });
 
 describe('generateSessionDir', () => {
-  it('returns /workspace when no repo provided', () => {
-    expect(generateSessionDir("")).toBe("/workspace");
-  });
-
-  it('returns /workspace when repo is null', () => {
-    expect(generateSessionDir(null)).toBe("/workspace");
+  it.each(["", null])('returns /workspace when repo is falsy: %s', (input) => {
+    expect(generateSessionDir(input)).toBe("/workspace");
   });
 
   describe('with repo', () => {
@@ -145,11 +139,6 @@ describe('generateSessionDir', () => {
 
     it('generates UUID subdirectory when repo provided', () => {
       expect(generateSessionDir("github.com/user/repo"))
-        .toBe("/workspace/abc12345");
-    });
-
-    it('uses first segment of UUID', () => {
-      expect(generateSessionDir("any-repo"))
         .toBe("/workspace/abc12345");
     });
   });
