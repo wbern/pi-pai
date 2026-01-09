@@ -32,6 +32,24 @@
         success_msg: "All required variables are configured"
       tags: [always]
 
+    - name: Warn if using insecure default MCP bearer token
+      ansible.builtin.debug:
+        msg: |
+          ╔══════════════════════════════════════════════════════════════════╗
+          ║  ⚠️  SECURITY WARNING: Using insecure default MCP bearer token!  ║
+          ╠══════════════════════════════════════════════════════════════════╣
+          ║  The MCP server is using the default 'tmux-local-dev' token.     ║
+          ║  This is INSECURE for non-local deployments.                     ║
+          ║                                                                  ║
+          ║  To fix: Set vault_mcp_bearer_token in group_vars/all/vault.yml  ║
+          ║  Generate a secure token: openssl rand -hex 32                   ║
+          ╚══════════════════════════════════════════════════════════════════╝
+      when: >-
+        vault_mcp_bearer_token is not defined or
+        vault_mcp_bearer_token == "" or
+        mcp_bearer_token == "tmux-local-dev"
+      tags: [always]
+
     # =========================================================================
     # OAuth Token Validation (local check)
     # =========================================================================
