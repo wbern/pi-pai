@@ -153,6 +153,8 @@
       when:
         - vault_tailscale_authkey is defined and vault_tailscale_authkey != ""
         - tailscale_status.rc != 0 or 'Logged out' in tailscale_status.stdout
+      no_log: true
+      diff: false
       tags: [tailscale]
 
     # =========================================================================
