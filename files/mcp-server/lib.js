@@ -6,8 +6,14 @@
  * Sanitize input string to prevent injection attacks.
  * Allows alphanumeric, dash, underscore, dot, space.
  * Optionally allows slash and @ for URLs.
+ *
+ * Security note: allowSlash=true preserves "/" but strips all shell metacharacters
+ * that enable command injection (;$`'"|\&><()!*?#). A "/" alone cannot cause
+ * injection - it only becomes dangerous with command separators like ";".
+ * Example: "repo; rm -rf /" becomes "repo rm -rf /" (harmless malformed URL).
+ *
  * @param {string} str - Input string
- * @param {boolean} allowSlash - Allow / and @ characters
+ * @param {boolean} allowSlash - Allow / and @ characters (for git URLs)
  * @returns {string} Sanitized string
  */
 export function sanitize(str, allowSlash = false) {

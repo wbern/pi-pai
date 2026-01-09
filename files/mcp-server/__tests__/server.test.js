@@ -39,7 +39,11 @@ describe('sanitize', () => {
       expect(sanitize("github.com/user/repo", true)).toBe("github.com/user/repo");
     });
 
-    it('allows @ symbol for git URLs', () => {
+    it('allows @ symbol', () => {
+      expect(sanitize("user@example.com", true)).toBe("user@example.com");
+    });
+
+    it('removes colon (not in allowed charset)', () => {
       expect(sanitize("git@github.com:user/repo", true)).toBe("git@github.comuser/repo");
     });
 
@@ -71,6 +75,13 @@ describe('buildPrompt', () => {
 
   it('handles null/undefined as falsy', () => {
     expect(buildPrompt(null, undefined)).toBe("");
+  });
+
+  it('preserves shell metacharacters in instruction (safe via array args, not shell)', () => {
+    // Instructions are natural language and may contain punctuation.
+    // Safety relies on spawn({shell: false}) and array args, not sanitization.
+    const instruction = "fix bug; echo $PATH | cat /etc/passwd";
+    expect(buildPrompt("", instruction)).toBe(instruction);
   });
 });
 

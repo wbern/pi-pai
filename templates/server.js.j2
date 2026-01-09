@@ -85,11 +85,11 @@ const toolHandlers = {
   spawn_session: async ({ repo, instruction, window_name }) => {
     // Sanitize inputs to prevent injection
     const safeRepo = sanitize(repo, true);  // allow slashes for URLs
-    const safeInstruction = instruction ? instruction.substring(0, 500) : "";  // limit length
+    const truncatedInstruction = instruction ? instruction.substring(0, 500) : "";
 
     // Generate session directory, prompt, and window name using pure functions
     const sessionDir = generateSessionDir(safeRepo);
-    const prompt = buildPrompt(safeRepo, safeInstruction);
+    const prompt = buildPrompt(safeRepo, truncatedInstruction);
     const windowName = generateWindowName(safeRepo, sanitize(window_name));
 
     try {
@@ -138,7 +138,7 @@ const toolHandlers = {
 
   restart_self: async ({ window_name, instruction }) => {
     const safeName = sanitize(window_name);
-    const safeInstruction = instruction ? instruction.substring(0, 500) : "";
+    const truncatedInstruction = instruction ? instruction.substring(0, 500) : "";
 
     if (!safeName) {
       return { content: [{ type: "text", text: "Error: window_name is required" }], isError: true };
@@ -152,13 +152,13 @@ const toolHandlers = {
         "-p", "#{pane_current_path}"
       ]);
 
-      // Build shell command for respawn-window
-      const escaped = safeInstruction.replace(/'/g, "'\\''");
-      const shellCmd = `${process.env.HOME}/claude-sandbox.sh --run '${escaped}' '${sessionDir}' '${safeName}'`;
-
-      // Atomic restart: kill current process and respawn in same window
+      // Atomic restart using tmux's direct execution mode (multiple args = no shell)
       // respawn-window -k preserves window name/index with no race conditions
-      run("tmux", ["respawn-window", "-k", "-t", `{{ tmux_session_name }}:${safeName}`, shellCmd]);
+      run("tmux", [
+        "respawn-window", "-k",
+        "-t", `{{ tmux_session_name }}:${safeName}`,
+        `${process.env.HOME}/claude-sandbox.sh`, "--run", truncatedInstruction, sessionDir, safeName
+      ]);
 
       console.log("Restarted:", safeName, "at", sessionDir);
       return { content: [{ type: "text", text: `Restarted session '${safeName}' at ${sessionDir}` }] };
