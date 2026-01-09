@@ -85,3 +85,8 @@ make copy-tokens # Export tokens for deployment
 - No meta-commentary about development process in code or commits
 - Keep solutions simple and focused
 - Prefer editing existing files over creating new ones
+
+## Related Docs
+
+- [AGENTS.md](AGENTS.md) - Agent onboarding and session workflow
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Technical architecture details

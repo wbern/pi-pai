@@ -159,6 +159,7 @@ pi-pai/
 ├── Makefile                 # Common commands
 ├── requirements.txt         # Python deps (molecule)
 ├── .gitleaks.toml           # Secrets scanner config
+├── AGENTS.md                # Agent onboarding and session workflow
 ├── CLAUDE.md                # Context for Claude Code sessions
 └── ARCHITECTURE.md          # Technical architecture details
 ```
