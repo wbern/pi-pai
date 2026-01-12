@@ -64,19 +64,7 @@ deploy:
 
 # Deploy to test VM (OrbStack)
 test:
-	@# Create vault.yml from example if missing
-	@if [ ! -f group_vars/all/vault.yml ]; then \
-		echo "Creating vault.yml from example..."; \
-		cp group_vars/all/vault.yml.example group_vars/all/vault.yml; \
-	fi
-	@# Auto-encrypt vault if needed (uses test password for local dev)
-	@if ! head -1 group_vars/all/vault.yml 2>/dev/null | grep -q '^\$$ANSIBLE_VAULT'; then \
-		echo "Encrypting vault with test password..."; \
-		echo "pi-pai-test" > /tmp/.vault_pass && \
-		ansible-vault encrypt group_vars/all/vault.yml --vault-password-file=/tmp/.vault_pass; \
-	else \
-		echo "pi-pai-test" > /tmp/.vault_pass; \
-	fi
+	$(call ensure_test_vault)
 	@# Verify OAuth tokens exist
 	@if [ ! -f .tokens/.claude/.credentials.json ]; then \
 		echo "ERROR: OAuth tokens not found in .tokens/"; \
@@ -87,7 +75,9 @@ test:
 		echo ""; \
 		exit 1; \
 	fi
-	ansible-playbook playbook.yml -i inventory/test.yml --vault-password-file=/tmp/.vault_pass
+	ansible-playbook playbook.yml -i inventory/test.yml \
+		--vault-password-file=/tmp/.vault_pass \
+		--extra-vars @molecule/default/vault.test.yml
 
 # Destroy test VM
 clean:
@@ -95,16 +85,17 @@ clean:
 
 # --- Molecule targets (full test lifecycle) ---
 
-# Helper to ensure vault exists, is encrypted, and password file exists
-define ensure_vault
-	@if [ ! -f group_vars/all/vault.yml ]; then \
-		echo "Creating vault.yml from example..."; \
-		cp group_vars/all/vault.yml.example group_vars/all/vault.yml; \
+# Helper to ensure TEST vault exists (separate from user's vault.yml)
+# Creates molecule/default/vault.test.yml with dummy values, never touches vault.yml
+define ensure_test_vault
+	@if [ ! -f molecule/default/vault.test.yml ]; then \
+		echo "Creating vault.test.yml for testing..."; \
+		cp group_vars/all/vault.yml.example molecule/default/vault.test.yml; \
 	fi
-	@if ! head -1 group_vars/all/vault.yml 2>/dev/null | grep -q '^\$$ANSIBLE_VAULT'; then \
-		echo "Encrypting vault with test password..."; \
+	@if ! head -1 molecule/default/vault.test.yml 2>/dev/null | grep -q '^\$$ANSIBLE_VAULT'; then \
+		echo "Encrypting vault.test.yml with test password..."; \
 		echo "pi-pai-test" > /tmp/.vault_pass && \
-		ansible-vault encrypt group_vars/all/vault.yml --vault-password-file=/tmp/.vault_pass; \
+		ansible-vault encrypt molecule/default/vault.test.yml --vault-password-file=/tmp/.vault_pass; \
 	else \
 		echo "pi-pai-test" > /tmp/.vault_pass; \
 	fi
@@ -112,7 +103,7 @@ endef
 
 # Full test: create → converge → verify → destroy
 test-full:
-	$(ensure_vault)
+	$(call ensure_test_vault)
 	ANSIBLE_VAULT_PASSWORD_FILE=/tmp/.vault_pass molecule test
 
 # Create VM only
@@ -121,12 +112,12 @@ create:
 
 # Run playbook against existing VM
 converge:
-	$(ensure_vault)
+	$(call ensure_test_vault)
 	ANSIBLE_VAULT_PASSWORD_FILE=/tmp/.vault_pass molecule converge
 
 # Run verification checks
 verify:
-	$(ensure_vault)
+	$(call ensure_test_vault)
 	ANSIBLE_VAULT_PASSWORD_FILE=/tmp/.vault_pass molecule verify
 
 # Destroy VM

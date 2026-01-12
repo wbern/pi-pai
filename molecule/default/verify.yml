@@ -218,6 +218,50 @@
       failed_when: false
 
     # =========================================================================
+    # MCP Session Spawn Tests
+    # =========================================================================
+    - name: Load vault variables for MCP token
+      ansible.builtin.include_vars:
+        file: ../../group_vars/all/vault.yml
+
+    - name: Spawn session via MCP with repo and session name
+      ansible.builtin.uri:
+        url: http://localhost:3100/mcp
+        method: POST
+        headers:
+          Authorization: "Bearer {{ vault_mcp_bearer_token }}"
+          Content-Type: application/json
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          id: 1
+          method: tools/call
+          params:
+            name: spawn_session
+            arguments:
+              repo: "github.com/test/my-repo"
+              window_name: "Test Session"
+        return_content: true
+      register: spawn_result
+
+    - name: Verify session directory created with correct path
+      ansible.builtin.stat:
+        path: ~/Repos/my-repo/test-session
+      register: session_dir
+      failed_when: not session_dir.stat.exists
+
+    - name: Verify tmux window was created
+      ansible.builtin.command: tmux list-windows -t main -F "#{window_name}"
+      register: tmux_windows
+      changed_when: false
+      failed_when: "'test-session' not in tmux_windows.stdout"
+
+    - name: Clean up test session
+      ansible.builtin.command: tmux kill-window -t main:test-session
+      changed_when: true
+      failed_when: false
+
+    # =========================================================================
     # Summary
     # =========================================================================
     - name: Report optional component status

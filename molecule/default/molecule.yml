@@ -17,9 +17,8 @@ platforms:
 
 provisioner:
   name: ansible
-  config_options:
-    defaults:
-      vault_password_file: ${ANSIBLE_VAULT_PASSWORD_FILE:-}
+  options:
+    extra-vars: "@molecule/default/vault.test.yml"
   playbooks:
     create: create.yml
     converge: ../../playbook.yml

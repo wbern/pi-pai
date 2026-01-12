@@ -3,6 +3,15 @@
  */
 
 /**
+ * Convert a string to a URL-friendly slug.
+ * @param {string} str - Input string
+ * @returns {string} Slugified string (lowercase, spaces to dashes)
+ */
+export function slugify(str) {
+  return str.toLowerCase().replace(/ /g, "-").replace(/[^a-z0-9-]/g, "").substring(0, 30);
+}
+
+/**
  * Sanitize input string to prevent injection attacks.
  * Allows alphanumeric, dash, underscore, dot, space.
  * Optionally allows slash and @ for URLs.
@@ -44,9 +53,13 @@ export function buildPrompt(repo, instruction) {
  * Generate window name from repo or use provided name.
  * @param {string} repo - Git repository URL (already sanitized)
  * @param {string} windowName - Custom window name (already sanitized)
+ * @param {string} sessionName - Session name to slugify (takes priority)
  * @returns {string} Window name to use
  */
-export function generateWindowName(repo, windowName) {
+export function generateWindowName(repo, windowName, sessionName) {
+  if (sessionName) {
+    return slugify(sessionName);
+  }
   if (windowName) {
     return windowName;
   }
@@ -59,13 +72,18 @@ export function generateWindowName(repo, windowName) {
 /**
  * Generate a unique session directory path.
  * @param {string} repo - Git repository URL (if provided, generates UUID subdir)
- * @returns {string} Directory path (e.g., "/workspace" or "/workspace/abc123")
+ * @param {string} sessionName - Session name to use as directory name
+ * @returns {string} Directory path (e.g., "/workspace" or "/repo-name/session-name")
  */
-export function generateSessionDir(repo) {
+export function generateSessionDir(repo, sessionName) {
   if (!repo) {
     return "/workspace";
   }
+  const repoName = repo.split("/").pop().replace(".git", "");
+  if (sessionName) {
+    return `/${repoName}/${slugify(sessionName)}`;
+  }
   // Generate short UUID (first segment)
   const uuid = crypto.randomUUID().split("-")[0];
-  return `/workspace/${uuid}`;
+  return `/${repoName}/${uuid}`;
 }

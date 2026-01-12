@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Project session: full access to ~/Repos
+# Project session: isolated to specific project directory
 run_project() {
     local prompt="$1"
     local workdir="${2:-/workspace}"
@@ -10,7 +10,7 @@ run_project() {
         --init \
         --memory {{ docker_memory_limit }} \
         --add-host=host.docker.internal:host-gateway \
-        -v ~/Repos:/workspace \
+        -v ~/Repos${workdir}:${workdir} \
         -v ~/.claude-docker:/home/node/.claude \
         -v ~/.claude-docker/.ssh:/home/node/.ssh:ro \
         -v ~/.claude-docker/.happy:/home/node/.happy \
@@ -69,9 +69,9 @@ if [[ "$1" == "--spawn" ]]; then
     PROMPT="$3"
     WINDOW_NAME="${4:-session-$(date +%s)}"
 
-    # Create session directory on host if it's a subdirectory of /workspace
+    # Create session directory on host (SESSION_DIR is like /repo/session-name)
     if [[ "$SESSION_DIR" != "/workspace" ]]; then
-        HOST_DIR="${HOME}/Repos/${SESSION_DIR#/workspace/}"
+        HOST_DIR="${HOME}/Repos${SESSION_DIR}"
         mkdir -p "$HOST_DIR"
     fi
 

@@ -4,7 +4,68 @@
 
 > **Alpha** - This project has been tested on Raspberry Pi 4 but is still under active development. Contributions welcome!
 
+## Contents
+
+- [What This Deploys](#what-this-deploys)
+- [Pi Setup](#pi-setup)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+- [Troubleshooting](#troubleshooting)
+- [FAQ](#faq)
+
 Ansible playbook for deploying an autonomous Claude Code server on Raspberry Pi 4.
+
+```mermaid
+flowchart TB
+    subgraph clients["Clients"]
+        mobile["Mobile Happy app"]
+        laptop["Laptop"]
+    end
+
+    subgraph deploy["Deployment"]
+        repo["pi-pai repo"]
+    end
+
+    subgraph pi["Remote Machine (pi)"]
+        mcp["MCP: control-plane"]
+        start{"start tmux session (Claude Code)"}
+        list{list tmux sessions}
+        kill{kill tmux session}
+        mcpother["MCP: other"]
+        subgraph tmux["tmux sessions"]
+            subgraph docker1["Docker container"]
+                subgraph happy1["happy-cli"]
+                    ctrl["Claude Code: control plane"]
+                end
+            end
+            subgraph docker2["Docker container"]
+                subgraph happy2["happy-cli"]
+                    spawned["Claude Code: spawned"]
+                end
+            end
+            subgraph docker3["Docker container"]
+                subgraph happy3["happy-cli"]
+                    spawned2["Claude Code: spawned"]
+                end
+            end
+        end
+    end
+
+    clients ~~~ deploy
+    mobile --> tmux
+    laptop --> tmux
+    ctrl --> mcp
+    mcp --> start
+    mcp --> list
+    mcp --> kill
+    ctrl --> mcpother
+    spawned --> mcpother
+    spawned2 --> mcpother
+
+    style spawned stroke-dasharray: 5 5
+    style spawned2 stroke-dasharray: 5 5
+```
 
 Based on [Claude Code In My Pocket](https://kendev.se/articles/raspberry-pi-claude-server).
 
@@ -355,6 +416,22 @@ If tokens are missing, re-copy from your local machine:
 ```bash
 make copy-tokens
 ansible-playbook playbook.yml --ask-vault-pass --ask-become-pass --tags tokens
+```
+
+## FAQ
+
+**Nothing happens when I prompt in the app?**
+
+Check the happy container logs for authentication errors:
+```bash
+ssh your-pi "docker logs $(docker ps -q --filter ancestor=claude-code) --tail 50"
+```
+
+If you see `OAuth token has expired`, refresh tokens:
+```bash
+make auth         # Re-authenticate
+make copy-tokens  # Export to .tokens/
+make deploy       # Push new credentials to Pi
 ```
 
 ## Testing

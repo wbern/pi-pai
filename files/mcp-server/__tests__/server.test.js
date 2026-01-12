@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { sanitize, buildPrompt, generateWindowName, generateSessionDir } from '../lib.js';
+import { sanitize, buildPrompt, generateWindowName, generateSessionDir, slugify } from '../lib.js';
 
 describe('sanitize', () => {
   it.each([null, undefined, ""])('returns empty string for falsy input: %s', (input) => {
@@ -84,6 +84,11 @@ describe('buildPrompt', () => {
 });
 
 describe('generateWindowName', () => {
+  it('slugifies and uses sessionName when provided', () => {
+    expect(generateWindowName("github.com/user/repo", "my-window", "My Project Name"))
+      .toBe("my-project-name");
+  });
+
   it('returns provided windowName when given', () => {
     expect(generateWindowName("github.com/user/repo", "my-window"))
       .toBe("my-window");
@@ -121,7 +126,30 @@ describe('generateWindowName', () => {
   });
 });
 
+describe('slugify', () => {
+  it('converts mixed case to lowercase and replaces spaces with dashes', () => {
+    expect(slugify("My Project Name")).toBe("my-project-name");
+  });
+
+  it('truncates output to 30 characters max', () => {
+    expect(slugify("This Is A Very Long Session Name That Exceeds Limit")).toBe("this-is-a-very-long-session-na");
+  });
+
+  it('removes special characters keeping only alphanumeric and dashes', () => {
+    expect(slugify("My Project! @#$%^&*()")).toBe("my-project-");
+  });
+
+  it('returns empty string for empty input', () => {
+    expect(slugify("")).toBe("");
+  });
+});
+
 describe('generateSessionDir', () => {
+  it('uses repo name and slugified sessionName as directory when both provided', () => {
+    expect(generateSessionDir("github.com/user/pi-pai", "Add Contributing MD"))
+      .toBe("/pi-pai/add-contributing-md");
+  });
+
   it.each(["", null])('returns /workspace when repo is falsy: %s', (input) => {
     expect(generateSessionDir(input)).toBe("/workspace");
   });
@@ -137,9 +165,9 @@ describe('generateSessionDir', () => {
       vi.unstubAllGlobals();
     });
 
-    it('generates UUID subdirectory when repo provided', () => {
+    it('generates repo/UUID subdirectory when repo provided without sessionName', () => {
       expect(generateSessionDir("github.com/user/repo"))
-        .toBe("/workspace/abc12345");
+        .toBe("/repo/abc12345");
     });
   });
 });

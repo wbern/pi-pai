@@ -4,6 +4,7 @@
 
 # Secrets - vault.yml.example is tracked, vault.yml is user's secrets
 group_vars/all/vault.yml
+molecule/default/vault.test.yml
 *.vault_pass
 .vault_pass*
 *_secret*
