@@ -477,14 +477,21 @@
         src: templates/Dockerfile.j2
         dest: "{{ docker_image_dir }}/Dockerfile"
         mode: '0644'
+      notify: Build Docker image
       tags: [docker]
 
-    - name: Build Claude Code Docker image
+    - name: Check if Docker image exists
+      ansible.builtin.command: docker images -q {{ docker_image_name }}
+      register: docker_image_check
+      changed_when: false
+      failed_when: false
+      tags: [docker]
+
+    - name: Build Docker image if missing
       ansible.builtin.command:
         cmd: docker build -t {{ docker_image_name }} .
         chdir: "{{ docker_image_dir }}"
-      register: docker_build
-      changed_when: "'Successfully built' in docker_build.stdout or 'Successfully tagged' in docker_build.stdout"
+      when: docker_image_check.stdout == ""
       tags: [docker]
 
     # =========================================================================
@@ -662,6 +669,13 @@
       tags: [host-claude]
 
   handlers:
+    - name: Build Docker image
+      ansible.builtin.command:
+        cmd: docker build -t {{ docker_image_name }} .
+        chdir: "{{ docker_image_dir }}"
+      register: docker_build
+      changed_when: "'Successfully built' in docker_build.stdout or 'Successfully tagged' in docker_build.stdout"
+
     - name: Reload systemd
       ansible.builtin.systemd:
         daemon_reload: true
