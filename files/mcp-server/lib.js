@@ -8,6 +8,7 @@
  * @returns {string} Slugified string (lowercase, spaces to dashes)
  */
 export function slugify(str) {
+  if (!str) return "";
   return str.toLowerCase().replace(/ /g, "-").replace(/[^a-z0-9-]/g, "").substring(0, 30);
 }
 

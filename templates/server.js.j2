@@ -86,12 +86,13 @@ const toolHandlers = {
   spawn_session: async ({ repo, instruction, session_name, window_name }) => {
     // Sanitize inputs to prevent injection
     const safeRepo = sanitize(repo, true);  // allow slashes for URLs
+    const safeSessionName = sanitize(session_name);
     const truncatedInstruction = instruction ? instruction.substring(0, 500) : "";
 
     // Generate session directory, prompt, and window name using pure functions
-    const sessionDir = generateSessionDir(safeRepo, session_name);
+    const sessionDir = generateSessionDir(safeRepo, safeSessionName);
     const prompt = buildPrompt(safeRepo, truncatedInstruction);
-    const windowName = generateWindowName(safeRepo, sanitize(window_name), session_name);
+    const windowName = generateWindowName(safeRepo, sanitize(window_name), safeSessionName);
 
     try {
       // Use spawn with array arguments (no shell interpolation)

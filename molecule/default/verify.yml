@@ -255,7 +255,7 @@
             name: spawn_session
             arguments:
               repo: "github.com/test/my-repo"
-              window_name: "Test Session"
+              session_name: "Test Session"
         return_content: true
       register: spawn_result
 

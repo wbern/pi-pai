@@ -139,8 +139,8 @@ describe('slugify', () => {
     expect(slugify("My Project! @#$%^&*()")).toBe("my-project-");
   });
 
-  it('returns empty string for empty input', () => {
-    expect(slugify("")).toBe("");
+  it.each([null, undefined, ""])('returns empty string for falsy input: %s', (input) => {
+    expect(slugify(input)).toBe("");
   });
 });
 
