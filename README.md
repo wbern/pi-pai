@@ -245,6 +245,7 @@ make destroy    # Destroy VM
 # OAuth tokens (required - deploy will fail without these)
 make auth         # Authenticate claude then happy locally
 make copy-tokens  # Copy tokens to .tokens/ for deployment
+make push-tokens  # Quick token update (bypasses Ansible)
 ```
 
 ## Available Tags
@@ -429,10 +430,11 @@ ssh your-pi "docker logs $(docker ps -q --filter ancestor=claude-code) --tail 50
 
 If you see `OAuth token has expired`, refresh tokens:
 ```bash
-make auth         # Re-authenticate
-make copy-tokens  # Export to .tokens/
-make deploy       # Push new credentials to Pi
+make copy-tokens && make push-tokens  # Quick refresh (~3 seconds)
 ```
+
+> **Note:** OAuth tokens expire regularly (~8 hours). The `push-tokens` target
+> bypasses Ansible for speed. Use `make deploy` only when other changes are needed.
 
 ## Testing
 
