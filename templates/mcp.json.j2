@@ -6,6 +6,10 @@
       "headers": {
         "Authorization": "Bearer {{ mcp_bearer_token }}"
       }
-    }
+    }{% if vault_github_pat is defined and vault_github_pat %},
+    "github": {
+      "type": "http",
+      "url": "http://host.docker.internal:{{ github_mcp_port }}/mcp"
+    }{% endif %}
   }
 }

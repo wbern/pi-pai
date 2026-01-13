@@ -7,6 +7,7 @@ pi_ssh_key: "~/.ssh/id_ed25519"  # SSH private key for Pi access (optional if us
 # Docker image settings
 docker_image_name: "claude-code"
 docker_memory_limit: "3g"
+docker_shm_size: "2g"
 
 # Git configuration for commits made by Claude
 claude_git_name: "Claude (Pi)"
@@ -14,6 +15,8 @@ claude_git_email: "claude@localhost"
 
 # MCP server settings
 mcp_server_port: 3100
+github_mcp_port: 3101
+github_mcp_image_version: "0.28.1"
 # Bearer token is set in vault.yml (vault_mcp_bearer_token)
 # Falls back to dev default if not set in vault
 mcp_bearer_token: "{{ vault_mcp_bearer_token | default('tmux-local-dev') }}"
@@ -29,4 +32,5 @@ repos_dir: "{{ pi_home }}/Repos"
 claude_docker_dir: "{{ pi_home }}/.claude-docker"
 control_plane_dir: "{{ pi_home }}/.claude-control-plane"
 mcp_server_dir: "{{ pi_home }}/tmux-control-plane"
+github_mcp_dir: "{{ pi_home }}/github-mcp"
 docker_image_dir: "{{ pi_home }}/claude-sandbox-image"

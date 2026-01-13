@@ -328,6 +328,8 @@
         - "{{ claude_docker_dir }}/.happy"
         - "{{ control_plane_dir }}/workspace"
         - "{{ mcp_server_dir }}"
+        - "{{ github_mcp_dir }}"
+        - "{{ pi_home }}/.config/github-mcp"
         - "{{ docker_image_dir }}"
         - "{{ pi_home }}/.config/systemd/user"
         - "{{ pi_home }}/.tmux/plugins"
@@ -549,6 +551,46 @@
       tags: [mcp, configs]
 
     # =========================================================================
+    # GitHub MCP Server (via mcp-proxy)
+    # =========================================================================
+    - name: Install mcp-proxy via pip
+      ansible.builtin.pip:
+        name: mcp-proxy
+        extra_args: --user
+      when: vault_github_pat is defined and vault_github_pat
+      tags: [github-mcp]
+
+    - name: Deploy GitHub MCP start script
+      ansible.builtin.copy:
+        src: files/github-mcp/start.sh
+        dest: "{{ github_mcp_dir }}/start.sh"
+        mode: '0755'
+      when: vault_github_pat is defined and vault_github_pat
+      notify: Restart github-mcp
+      tags: [github-mcp]
+
+    - name: Pull GitHub MCP Docker image
+      ansible.builtin.command: docker pull ghcr.io/github/github-mcp-server:{{ github_mcp_image_version }}
+      register: docker_pull
+      changed_when: "'Downloaded newer image' in docker_pull.stdout or 'Pull complete' in docker_pull.stdout"
+      when: vault_github_pat is defined and vault_github_pat
+      tags: [github-mcp]
+
+    - name: Deploy GitHub MCP environment file
+      ansible.builtin.copy:
+        content: |
+          GITHUB_PERSONAL_ACCESS_TOKEN={{ vault_github_pat }}
+          GITHUB_MCP_PORT={{ github_mcp_port }}
+          GITHUB_MCP_IMAGE_VERSION={{ github_mcp_image_version }}
+        dest: "{{ pi_home }}/.config/github-mcp/env"
+        mode: '0600'
+      when: vault_github_pat is defined and vault_github_pat
+      no_log: true
+      diff: false
+      notify: Restart github-mcp
+      tags: [github-mcp, secrets]
+
+    # =========================================================================
     # Secrets (from vault)
     # =========================================================================
     - name: Store GitHub PAT
@@ -604,6 +646,17 @@
         - Restart claude-tmux
       tags: [systemd]
 
+    - name: Deploy GitHub MCP systemd service
+      ansible.builtin.template:
+        src: templates/github-mcp.service.j2
+        dest: "{{ pi_home }}/.config/systemd/user/github-mcp.service"
+        mode: '0644'
+      when: vault_github_pat is defined and vault_github_pat
+      notify:
+        - Reload systemd
+        - Restart github-mcp
+      tags: [systemd, github-mcp]
+
     - name: Enable and start services
       ansible.builtin.systemd:
         name: "{{ item }}"
@@ -614,6 +667,15 @@
         - tmux-control-plane
         - claude-tmux
       tags: [systemd]
+
+    - name: Enable and start GitHub MCP service
+      ansible.builtin.systemd:
+        name: github-mcp
+        enabled: true
+        state: started
+        scope: user
+      when: vault_github_pat is defined and vault_github_pat
+      tags: [systemd, github-mcp]
 
     # =========================================================================
     # tmux Plugins
@@ -692,3 +754,10 @@
         name: claude-tmux
         state: restarted
         scope: user
+
+    - name: Restart github-mcp
+      ansible.builtin.systemd:
+        name: github-mcp
+        state: restarted
+        scope: user
+      when: vault_github_pat is defined and vault_github_pat

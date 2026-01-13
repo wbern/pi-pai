@@ -306,13 +306,11 @@ cat ~/.claude-docker/.ssh/id_ed25519.pub
 # Add to https://github.com/settings/keys
 ```
 
-**2. Add GitHub MCP** (from within a Claude session on Pi):
+**2. GitHub MCP** (automated if `vault_github_pat` is set)
+
+GitHub MCP is automatically configured during deploy. If you need to verify:
 ```bash
-# Press ! for bash, then:
-claude mcp add github \
-  --transport http \
-  --url https://api.githubcopilot.com/mcp/ \
-  --header "Authorization: Bearer \${GITHUB_PAT}"
+# In a Claude session, run /mcp to see connected servers
 ```
 
 **3. Install tmux plugins** (on Pi):

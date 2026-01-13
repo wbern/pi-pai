@@ -8,7 +8,7 @@ run_project() {
     local window_name="$3"
     docker run -it --rm \
         --init \
-        --ipc=host \
+        --shm-size={{ docker_shm_size }} \
         --memory {{ docker_memory_limit }} \
         --add-host=host.docker.internal:host-gateway \
         -v ~/Repos${workdir}:${workdir} \
@@ -37,7 +37,7 @@ fi
 if [[ -z "$1" ]]; then
     docker run -it --rm \
         --init \
-        --ipc=host \
+        --shm-size={{ docker_shm_size }} \
         --memory {{ docker_memory_limit }} \
         --add-host=host.docker.internal:host-gateway \
         -v ~/.claude-control-plane/workspace:/workspace \
