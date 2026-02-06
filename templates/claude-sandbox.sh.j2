@@ -22,6 +22,7 @@ run_project() {
         -e CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
         -e GITHUB_PAT="$(cat ~/.claude-docker/.github_token 2>/dev/null)" \
         -e CONTEXT7_TOKEN="$(cat ~/.claude-docker/.context7_token 2>/dev/null)" \
+        -e CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.claude-docker/.oauth_token 2>/dev/null)" \
         -e CLAUDE_CONFIG_DIR="/home/node/.claude" \
         ${window_name:+-e TMUX_WINDOW_NAME="$window_name"} \
         claude-code ${prompt:+"$prompt"}
@@ -49,6 +50,7 @@ if [[ -z "$1" ]]; then
         -e CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
         -e GITHUB_PAT="$(cat ~/.claude-docker/.github_token 2>/dev/null)" \
         -e CONTEXT7_TOKEN="$(cat ~/.claude-docker/.context7_token 2>/dev/null)" \
+        -e CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.claude-docker/.oauth_token 2>/dev/null)" \
         -e CLAUDE_CONFIG_DIR="/home/node/.claude" \
         claude-code
     exit 0

@@ -19,3 +19,9 @@ vault_context7_token: ""
 # If not set, defaults to "tmux-local-dev" which is INSECURE for non-local deployments
 # Generate a secure token: openssl rand -hex 32
 vault_mcp_bearer_token: ""
+
+# Claude OAuth Token (optional - for bypassing token expiration)
+# Generate with: claude setup-token
+# This is a 1-year token that avoids the 6-12 hour expiration bug
+# See: https://github.com/anthropics/claude-code/issues/12447
+vault_claude_oauth_token: ""

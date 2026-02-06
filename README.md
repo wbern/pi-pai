@@ -151,7 +151,12 @@ npm install -g happy-coder
    ```
 
    Available secrets (all optional - leave placeholders if not using):
-   - `vault_github_pat`: Auto-uploads SSH keys to GitHub (requires `admin:public_key` scope)
+   - `vault_github_pat`: GitHub Personal Access Token - enables SSH key upload and GitHub MCP
+     - **SSH key upload**: `admin:public_key` scope
+     - **GitHub MCP**: `repo` (recommended minimum), plus optionally:
+       - `read:org` for team/org operations
+       - `security_events` for code scanning
+       - `notifications`, `gist`, `project` as needed
    - `vault_tailscale_authkey`: Auto-joins Tailscale network
    - `vault_mcp_bearer_token`: Secures the MCP server (generate with `openssl rand -hex 32`)
    - `vault_context7_token`: Context7 API token for documentation lookups
@@ -271,6 +276,7 @@ ansible-playbook playbook.yml --ask-vault-pass --ask-become-pass --tags docker
 | `scripts` | Shell scripts (claude-sandbox.sh, etc.) |
 | `docs` | CLAUDE.md context files |
 | `mcp` | MCP server setup |
+| `github-mcp` | GitHub MCP service (requires `vault_github_pat`) |
 | `secrets` | Deploy secrets to Pi |
 | `systemd` | Systemd service setup |
 | `tmux` | tmux plugins |

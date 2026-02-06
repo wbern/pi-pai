@@ -62,15 +62,15 @@ pi-pai/
 │             │                                                   │
 │             │ HTTP (host.docker.internal:3100)                  │
 │             ▼                                                   │
-│  ┌──────────────────────┐                                      │
-│  │ MCP Server (Host)    │                                      │
-│  │ tmux-control-plane   │                                      │
-│  │                      │                                      │
-│  │ • spawn_session()    │──▶ tmux new-window + claude-sandbox  │
-│  │ • list_sessions()    │                                      │
-│  │ • kill_session()     │                                      │
-│  │ • end_session()      │                                      │
-│  │ • restart_self()     │──▶ tmux respawn-window (atomic)      │
+│  ┌──────────────────────┐    ┌──────────────────────┐          │
+│  │ MCP Server (Host)    │    │ GitHub MCP (Host)    │          │
+│  │ tmux-control-plane   │    │ github-mcp.service   │          │
+│  │                      │    │                      │          │
+│  │ • spawn_session()    │──▶ │ • mcp-proxy:3101    │          │
+│  │ • list_sessions()    │    │ • Docker: github-   │          │
+│  │ • kill_session()     │    │   mcp-server image  │          │
+│  │ • end_session()      │    │ • PAT via Env File  │          │
+│  │ • restart_self()     │    └──────────────────────┘          │
 │  └──────────────────────┘                                      │
 │                                                                 │
 │  ┌──────────────────────┐                                      │
@@ -149,10 +149,11 @@ This is acceptable because prompts are natural language instructions, not code. 
 - OAuth token deployment from local machine
 - GitHub Actions CI (lint, secrets scan, syntax check)
 - Molecule testing with OrbStack
+- GitHub MCP as self-hosted service (via mcp-proxy + Docker)
 - Tested on Raspberry Pi 4
 
 **Manual post-deploy:**
-- GitHub MCP setup (one-time `claude mcp add` command)
+- None (GitHub MCP is now automated if `vault_github_pat` is set)
 
 ## Key Files
 
@@ -166,6 +167,8 @@ This is acceptable because prompts are natural language instructions, not code. 
 | `templates/server.js.j2` | MCP server template (uses vars for port/token/session name) |
 | `templates/claude-tmux.service.j2` | Starts tmux + control plane on boot |
 | `files/systemd/tmux-control-plane.service` | Starts MCP server on boot |
+| `files/github-mcp/start.sh` | GitHub MCP wrapper (mcp-proxy + Docker) |
+| `templates/github-mcp.service.j2` | GitHub MCP systemd service |
 
 ## Running the Playbook
 
@@ -202,14 +205,12 @@ OAuth tokens are now copied automatically during deployment (from `.tokens/` on 
    # Add to https://github.com/settings/keys
    ```
 
-2. **Add GitHub MCP (from within Claude session):**
+2. **GitHub MCP:** (automated if `vault_github_pat` is set)
+
+   Runs as a systemd service via mcp-proxy. Verify with:
    ```bash
-   # Press ! for bash shell
-   claude mcp add github \
-     --transport http \
-     --url https://api.githubcopilot.com/mcp/ \
-     --header "Authorization: Bearer \${GITHUB_PAT}"
-   # exit back to Claude, /mcp to verify
+   systemctl --user status github-mcp
+   curl -s http://localhost:3101/health
    ```
 
 3. **Install tmux plugins:**
