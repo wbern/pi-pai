@@ -1,7 +1,6 @@
 [Unit]
 Description=GitHub MCP server (via mcp-proxy)
-After=network.target docker.service
-Requires=docker.service
+After=network-online.target
 
 [Service]
 Type=simple

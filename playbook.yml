@@ -96,6 +96,7 @@
           - neovim
           - zram-tools
           - cpufrequtils
+          - pipx
         state: present
         update_cache: true
       tags: [packages]
@@ -553,11 +554,14 @@
     # =========================================================================
     # GitHub MCP Server (via mcp-proxy)
     # =========================================================================
-    - name: Install mcp-proxy via pip
-      ansible.builtin.pip:
-        name: mcp-proxy
-        extra_args: --user
-      when: vault_github_pat is defined and vault_github_pat
+    - name: Install mcp-proxy via pipx
+      ansible.builtin.command:
+        cmd: pipx install mcp-proxy
+        creates: "{{ pi_home }}/.local/bin/mcp-proxy"
+      when: >-
+        vault_github_pat is defined and
+        vault_github_pat | length > 10 and
+        vault_github_pat != 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
       tags: [github-mcp]
 
     - name: Deploy GitHub MCP start script
@@ -565,7 +569,10 @@
         src: files/github-mcp/start.sh
         dest: "{{ github_mcp_dir }}/start.sh"
         mode: '0755'
-      when: vault_github_pat is defined and vault_github_pat
+      when: >-
+        vault_github_pat is defined and
+        vault_github_pat | length > 10 and
+        vault_github_pat != 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
       notify: Restart github-mcp
       tags: [github-mcp]
 
@@ -573,7 +580,10 @@
       ansible.builtin.command: docker pull ghcr.io/github/github-mcp-server:{{ github_mcp_image_version }}
       register: docker_pull
       changed_when: "'Downloaded newer image' in docker_pull.stdout or 'Pull complete' in docker_pull.stdout"
-      when: vault_github_pat is defined and vault_github_pat
+      when: >-
+        vault_github_pat is defined and
+        vault_github_pat | length > 10 and
+        vault_github_pat != 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
       tags: [github-mcp]
 
     - name: Deploy GitHub MCP environment file
@@ -584,7 +594,10 @@
           GITHUB_MCP_IMAGE_VERSION={{ github_mcp_image_version }}
         dest: "{{ pi_home }}/.config/github-mcp/env"
         mode: '0600'
-      when: vault_github_pat is defined and vault_github_pat
+      when: >-
+        vault_github_pat is defined and
+        vault_github_pat | length > 10 and
+        vault_github_pat != 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
       no_log: true
       diff: false
       notify: Restart github-mcp
@@ -598,7 +611,10 @@
         content: "{{ vault_github_pat }}"
         dest: "{{ claude_docker_dir }}/.github_token"
         mode: '0600'
-      when: vault_github_pat is defined and vault_github_pat != ""
+      when: >-
+        vault_github_pat is defined and
+        vault_github_pat | length > 10 and
+        vault_github_pat != 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
       no_log: true
       diff: false
       tags: [secrets]
@@ -609,6 +625,16 @@
         dest: "{{ claude_docker_dir }}/.context7_token"
         mode: '0600'
       when: vault_context7_token is defined and vault_context7_token != ""
+      no_log: true
+      diff: false
+      tags: [secrets]
+
+    - name: Store Claude OAuth token (1-year token from claude setup-token)
+      ansible.builtin.copy:
+        content: "{{ vault_claude_oauth_token }}"
+        dest: "{{ claude_docker_dir }}/.oauth_token"
+        mode: '0600'
+      when: vault_claude_oauth_token is defined and vault_claude_oauth_token != ""
       no_log: true
       diff: false
       tags: [secrets]
@@ -651,7 +677,10 @@
         src: templates/github-mcp.service.j2
         dest: "{{ pi_home }}/.config/systemd/user/github-mcp.service"
         mode: '0644'
-      when: vault_github_pat is defined and vault_github_pat
+      when: >-
+        vault_github_pat is defined and
+        vault_github_pat | length > 10 and
+        vault_github_pat != 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
       notify:
         - Reload systemd
         - Restart github-mcp
@@ -663,6 +692,7 @@
         enabled: true
         state: started
         scope: user
+        daemon_reload: true
       loop:
         - tmux-control-plane
         - claude-tmux
@@ -674,7 +704,11 @@
         enabled: true
         state: started
         scope: user
-      when: vault_github_pat is defined and vault_github_pat
+        daemon_reload: true
+      when: >-
+        vault_github_pat is defined and
+        vault_github_pat | length > 10 and
+        vault_github_pat != 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
       tags: [systemd, github-mcp]
 
     # =========================================================================
@@ -760,4 +794,7 @@
         name: github-mcp
         state: restarted
         scope: user
-      when: vault_github_pat is defined and vault_github_pat
+      when: >-
+        vault_github_pat is defined and
+        vault_github_pat | length > 10 and
+        vault_github_pat != 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'

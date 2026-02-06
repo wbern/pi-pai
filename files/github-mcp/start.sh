@@ -12,5 +12,5 @@ VERSION="${GITHUB_MCP_IMAGE_VERSION:-0.28.1}"
 exec ~/.local/bin/mcp-proxy \
     --port "$PORT" \
     -- docker run -i --rm \
-        -e GITHUB_PERSONAL_ACCESS_TOKEN \
+        -e "GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_PERSONAL_ACCESS_TOKEN}" \
         "ghcr.io/github/github-mcp-server:${VERSION}"
