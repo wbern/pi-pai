@@ -7,10 +7,14 @@ set -e
 PORT="${GITHUB_MCP_PORT:-3101}"
 VERSION="${GITHUB_MCP_IMAGE_VERSION:-0.28.1}"
 
+# Create env file to avoid token in process list
+ENV_FILE=$(mktemp)
+trap 'rm -f "$ENV_FILE"' EXIT
+echo "GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_PERSONAL_ACCESS_TOKEN}" > "$ENV_FILE"
+
 # Run mcp-proxy, wrapping the GitHub MCP Docker image
-# GITHUB_PERSONAL_ACCESS_TOKEN is inherited from systemd environment
 exec ~/.local/bin/mcp-proxy \
     --port "$PORT" \
     -- docker run -i --rm \
-        -e "GITHUB_PERSONAL_ACCESS_TOKEN=${GITHUB_PERSONAL_ACCESS_TOKEN}" \
+        --env-file "$ENV_FILE" \
         "ghcr.io/github/github-mcp-server:${VERSION}"

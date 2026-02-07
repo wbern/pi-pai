@@ -19,7 +19,7 @@ github_mcp_port: 3101
 github_mcp_image_version: "0.28.1"
 # Bearer token is set in vault.yml (vault_mcp_bearer_token)
 # Falls back to dev default if not set in vault
-mcp_bearer_token: "{{ vault_mcp_bearer_token | default('tmux-local-dev') }}"
+mcp_bearer_token: "{{ vault_mcp_bearer_token | default('tmux-local-dev', true) }}"
 
 # Node.js version
 node_lts_version: "22"
