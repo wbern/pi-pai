@@ -72,20 +72,23 @@ export function generateWindowName(repo, windowName, sessionName) {
 
 /**
  * Generate a unique session directory path.
- * @param {string} repo - Git repository URL (if provided, generates UUID subdir)
+ * @param {string} repo - Git repository URL (if provided, uses repo slug as prefix)
  * @param {string} sessionName - Session name to use as directory name
- * @returns {string} Directory path (e.g., "/workspace" or "/repo-name--session-name--a1b2")
+ * @returns {string} Directory path (e.g., "/session--a1b2c3d4" or "/repo-name--session-name--a1b2")
  */
 export function generateSessionDir(repo, sessionName) {
+  const uuid = crypto.randomUUID().split("-")[0];
+  if (!repo && !sessionName) {
+    return `/session--${uuid}`;
+  }
   if (!repo) {
-    return "/workspace";
+    const suffix = uuid.slice(0, 4);
+    return `/${slugify(sessionName)}--${suffix}`;
   }
   const repoName = repo.split("/").pop().replace(".git", "");
   if (sessionName) {
-    const suffix = crypto.randomUUID().split("-")[0].slice(0, 4);
+    const suffix = uuid.slice(0, 4);
     return `/${repoName}--${slugify(sessionName)}--${suffix}`;
   }
-  // Generate short UUID (first segment)
-  const uuid = crypto.randomUUID().split("-")[0];
   return `/${repoName}--${uuid}`;
 }

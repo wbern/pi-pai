@@ -70,7 +70,7 @@ fi
 # Instructions are NOT sanitized (may contain punctuation) but are passed via
 # array args to spawn() with shell:false, preventing injection.
 if [[ "$1" == "--spawn" ]]; then
-    SESSION_DIR="${2:-/workspace}"
+    SESSION_DIR="${2:?SESSION_DIR required}"
     PROMPT="$3"
     WINDOW_NAME="${4:-session-$(date +%s)}"
 

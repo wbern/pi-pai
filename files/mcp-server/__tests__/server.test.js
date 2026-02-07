@@ -145,29 +145,32 @@ describe('slugify', () => {
 });
 
 describe('generateSessionDir', () => {
-  it.each(["", null])('returns /workspace when repo is falsy: %s', (input) => {
-    expect(generateSessionDir(input)).toBe("/workspace");
+  beforeEach(() => {
+    vi.stubGlobal('crypto', {
+      randomUUID: vi.fn(() => 'abc12345-6789-0def-ghij-klmnopqrstuv')
+    });
   });
 
-  describe('with repo', () => {
-    beforeEach(() => {
-      vi.stubGlobal('crypto', {
-        randomUUID: vi.fn(() => 'abc12345-6789-0def-ghij-klmnopqrstuv')
-      });
-    });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
-    afterEach(() => {
-      vi.unstubAllGlobals();
-    });
+  it.each(["", null])('returns /session--UUID when repo is falsy and no sessionName: %s', (input) => {
+    expect(generateSessionDir(input)).toBe("/session--abc12345");
+  });
 
-    it('uses repo name, slugified sessionName, and short suffix as directory', () => {
-      expect(generateSessionDir("github.com/user/pi-pai", "Add Contributing MD"))
-        .toBe("/pi-pai--add-contributing-md--abc1");
-    });
+  it('uses slugified sessionName with suffix when no repo', () => {
+    expect(generateSessionDir("", "Research WebSockets"))
+      .toBe("/research-websockets--abc1");
+  });
 
-    it('generates repo--UUID directory when repo provided without sessionName', () => {
-      expect(generateSessionDir("github.com/user/repo"))
-        .toBe("/repo--abc12345");
-    });
+  it('uses repo name, slugified sessionName, and short suffix', () => {
+    expect(generateSessionDir("github.com/user/pi-pai", "Add Contributing MD"))
+      .toBe("/pi-pai--add-contributing-md--abc1");
+  });
+
+  it('generates repo--UUID directory when repo provided without sessionName', () => {
+    expect(generateSessionDir("github.com/user/repo"))
+      .toBe("/repo--abc12345");
   });
 });
