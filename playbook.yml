@@ -639,6 +639,25 @@
       diff: false
       tags: [secrets]
 
+    - name: Generate credentials.json from 1-year OAuth token
+      ansible.builtin.copy:
+        content: |
+          {
+            "claudeAiOauth": {
+              "accessToken": "{{ vault_claude_oauth_token }}",
+              "expiresAt": 1900000000000,
+              "scopes": ["user:inference","user:mcp_servers","user:profile","user:sessions:claude_code"],
+              "subscriptionType": "max",
+              "rateLimitTier": "default_claude_max_20x"
+            }
+          }
+        dest: "{{ claude_docker_dir }}/.credentials.json"
+        mode: '0600'
+      when: vault_claude_oauth_token is defined and vault_claude_oauth_token != ""
+      no_log: true
+      diff: false
+      tags: [secrets]
+
     # =========================================================================
     # Systemd Services
     # =========================================================================
