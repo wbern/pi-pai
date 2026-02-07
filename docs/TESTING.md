@@ -148,7 +148,7 @@ ssh ubuntu.orb.local 'which tailscale && tailscale --version | head -1'
 # Expected: /usr/bin/tailscale and version number
 
 # Directory structure
-ssh ubuntu.orb.local 'ls -d ~/Repos ~/.claude-docker ~/.claude-control-plane ~/tmux-control-plane 2>/dev/null | wc -l'
+ssh ubuntu.orb.local 'ls -d ~/Sessions ~/.claude-docker ~/.claude-control-plane ~/tmux-control-plane 2>/dev/null | wc -l'
 # Expected: 4
 ```
 

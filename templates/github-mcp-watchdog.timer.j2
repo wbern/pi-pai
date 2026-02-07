@@ -1,0 +1,9 @@
+[Unit]
+Description=GitHub MCP health check timer
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=30
+
+[Install]
+WantedBy=timers.target

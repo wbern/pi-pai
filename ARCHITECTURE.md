@@ -53,7 +53,7 @@ pi-pai/
 │  │ Control Plane        │    │ Project Session      │          │
 │  │ (Docker)             │    │ (Docker)             │          │
 │  │                      │    │                      │          │
-│  │ • ~/.claude-control- │    │ • ~/Repos mounted    │          │
+│  │ • ~/.claude-control- │    │ • ~/Sessions mounted │          │
 │  │   plane/workspace    │    │ • SSH keys mounted   │          │
 │  │ • NO repo access     │    │ • Full git access    │          │
 │  │ • NO SSH keys        │    │ • --dangerously-skip │          │

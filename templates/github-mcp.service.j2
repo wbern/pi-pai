@@ -1,6 +1,8 @@
 [Unit]
 Description=GitHub MCP server (via mcp-proxy)
 After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple

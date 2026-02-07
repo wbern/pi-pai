@@ -79,6 +79,29 @@
         not github_mcp_script.stat.exists
       when: "'github-mcp.service' in github_mcp_exists.stdout"
 
+    - name: Check github-mcp healthcheck script exists
+      ansible.builtin.stat:
+        path: ~/github-mcp/healthcheck.sh
+      register: github_mcp_healthcheck
+      failed_when: >-
+        'github-mcp.service' in github_mcp_exists.stdout and
+        not github_mcp_healthcheck.stat.exists
+      when: "'github-mcp.service' in github_mcp_exists.stdout"
+
+    - name: Check github-mcp-watchdog timer is enabled
+      ansible.builtin.command: systemctl --user is-enabled github-mcp-watchdog.timer
+      register: watchdog_timer_enabled
+      changed_when: false
+      failed_when: watchdog_timer_enabled.stdout != 'enabled'
+      when: "'github-mcp.service' in github_mcp_exists.stdout"
+
+    - name: Check github-mcp-watchdog timer is active
+      ansible.builtin.command: systemctl --user is-active github-mcp-watchdog.timer
+      register: watchdog_timer_active
+      changed_when: false
+      failed_when: watchdog_timer_active.stdout != 'active'
+      when: "'github-mcp.service' in github_mcp_exists.stdout"
+
     - name: Check tmux session exists
       ansible.builtin.command: tmux has-session -t main
       register: tmux_session
@@ -208,7 +231,7 @@
         path: "{{ item }}"
       register: dir_check
       loop:
-        - ~/Repos
+        - ~/Sessions
         - ~/.claude-docker
         - ~/.claude-docker/.ssh
         - ~/.claude-control-plane
@@ -301,10 +324,12 @@
       register: spawn_result
 
     - name: Verify session directory created with correct path
-      ansible.builtin.stat:
-        path: ~/Repos/my-repo/test-session
+      ansible.builtin.find:
+        paths: ~/Sessions
+        patterns: "my-repo--test-session--*"
+        file_type: directory
       register: session_dir
-      failed_when: not session_dir.stat.exists
+      failed_when: session_dir.matched == 0
 
     - name: Verify tmux window was created
       ansible.builtin.command: tmux list-windows -t main -F "#{window_name}"
@@ -331,6 +356,7 @@
           Tailscale: {{ 'installed' if tailscale_check.rc == 0 else 'not installed' }}
           Claude Code on host: {{ 'installed' if claude_host.rc == 0 and claude_host.stdout != '' else 'not installed' }}
           GitHub MCP: {{ 'configured' if github_mcp_exists.stdout is defined and 'github-mcp.service' in github_mcp_exists.stdout else 'not configured (no PAT)' }}
+          GitHub MCP watchdog: {{ 'active' if watchdog_timer_active is defined and watchdog_timer_active.stdout == 'active' else 'not configured' }}
           Node.js version: {{ node_version.stdout | trim }}
           pnpm version: {{ pnpm_version.stdout | trim }}
 

@@ -11,7 +11,7 @@ run_project() {
         --shm-size={{ docker_shm_size }} \
         --memory {{ docker_memory_limit }} \
         --add-host=host.docker.internal:host-gateway \
-        -v ~/Repos${workdir}:${workdir} \
+        -v ~/Sessions${workdir}:${workdir} \
         -v ~/.claude-docker:/home/node/.claude \
         -v ~/.claude-docker/.ssh:/home/node/.ssh:ro \
         -v ~/.claude-docker/.happy:/home/node/.happy \
@@ -41,9 +41,10 @@ if [[ -z "$1" ]]; then
         --shm-size={{ docker_shm_size }} \
         --memory {{ docker_memory_limit }} \
         --add-host=host.docker.internal:host-gateway \
-        -v ~/.claude-control-plane/workspace:/workspace \
+        -v ~/.claude-control-plane/workspace:/control-plane \
         -v ~/.claude-docker:/home/node/.claude \
         -v ~/.claude-docker/.happy:/home/node/.happy \
+        -w /control-plane \
         -e TERM=xterm-256color \
         -e COLORTERM=truecolor \
         -e TMPDIR=/home/node/.claude/tmp \
@@ -73,9 +74,9 @@ if [[ "$1" == "--spawn" ]]; then
     PROMPT="$3"
     WINDOW_NAME="${4:-session-$(date +%s)}"
 
-    # Create session directory on host (SESSION_DIR is like /repo/session-name)
-    if [[ "$SESSION_DIR" != "/workspace" ]]; then
-        HOST_DIR="${HOME}/Repos${SESSION_DIR}"
+    # Create session directory on host (SESSION_DIR is like /repo--session-name--hash)
+    HOST_DIR="${HOME}/Sessions${SESSION_DIR}"
+    if [[ ! -d "$HOST_DIR" ]]; then
         mkdir -p "$HOST_DIR"
     fi
 

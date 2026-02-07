@@ -1,0 +1,7 @@
+[Unit]
+Description=GitHub MCP health check (watchdog)
+
+[Service]
+Type=oneshot
+ExecStart=%h/github-mcp/healthcheck.sh
+EnvironmentFile=%h/.config/github-mcp/env

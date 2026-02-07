@@ -334,7 +334,7 @@ GitHub MCP is automatically configured during deploy. If you need to verify:
 │  │ Control Plane   │    │ Project Session │                │
 │  │ (Docker)        │    │ (Docker)        │                │
 │  │                 │    │                 │                │
-│  │ - No repo access│    │ - Full ~/Repos  │                │
+│  │ - No repo access│    │ - ~/Sessions    │                │
 │  │ - No SSH keys   │    │ - SSH keys      │                │
 │  │ - MCP tools     │    │ - Git access    │                │
 │  └────────┬────────┘    └─────────────────┘                │

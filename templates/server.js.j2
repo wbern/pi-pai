@@ -70,6 +70,17 @@ const TOOLS = [
       },
       required: ["window_name"]
     }
+  },
+  {
+    name: "restart_service",
+    description: "Restart a systemd user service by name. Use when a service (e.g. github-mcp) is unresponsive.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        service: { type: "string", description: "Service name to restart (e.g. 'github-mcp')" }
+      },
+      required: ["service"]
+    }
   }
 ];
 
@@ -136,6 +147,20 @@ const toolHandlers = {
   // Alias for kill_session (same functionality, different API)
   end_session: async ({ window }) => {
     return toolHandlers.kill_session({ target: window });
+  },
+
+  restart_service: async ({ service }) => {
+    const ALLOWED_SERVICES = ["github-mcp"];
+    if (!ALLOWED_SERVICES.includes(service)) {
+      return { content: [{ type: "text", text: `Error: service '${service}' not in allowlist [${ALLOWED_SERVICES.join(", ")}]` }], isError: true };
+    }
+    try {
+      run("systemctl", ["--user", "restart", service]);
+      console.log("Restarted service:", service);
+      return { content: [{ type: "text", text: `Restarted ${service}` }] };
+    } catch (e) {
+      return { content: [{ type: "text", text: `Failed to restart ${service}: ${e.message}` }], isError: true };
+    }
   },
 
   restart_self: async ({ window_name, instruction }) => {

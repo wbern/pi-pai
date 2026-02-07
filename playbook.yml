@@ -19,7 +19,7 @@
         that:
           - pi_host is defined and pi_host != "YOUR_PI_HOST"
           - pi_user is defined and pi_user | length > 0
-          - repos_dir is defined
+          - sessions_dir is defined
           - claude_docker_dir is defined
           - docker_image_name is defined
           - tmux_session_name is defined
@@ -322,7 +322,8 @@
         state: directory
         mode: '0755'
       loop:
-        - "{{ repos_dir }}"
+        - "{{ sessions_dir }}"
+        - "{{ sessions_dir }}/workspace"
         - "{{ claude_docker_dir }}"
         - "{{ claude_docker_dir }}/tmp"
         - "{{ claude_docker_dir }}/.ssh"
@@ -451,10 +452,10 @@
     # =========================================================================
     # Documentation (CLAUDE.md files)
     # =========================================================================
-    - name: Deploy Repos CLAUDE.md
+    - name: Deploy Sessions CLAUDE.md
       ansible.builtin.copy:
         src: files/docs/CLAUDE-repos.md
-        dest: "{{ repos_dir }}/CLAUDE.md"
+        dest: "{{ sessions_dir }}/CLAUDE.md"
         mode: '0644'
       tags: [docs]
 
@@ -602,6 +603,54 @@
       diff: false
       notify: Restart github-mcp
       tags: [github-mcp, secrets]
+
+    - name: Deploy GitHub MCP healthcheck script
+      ansible.builtin.copy:
+        src: files/github-mcp/healthcheck.sh
+        dest: "{{ github_mcp_dir }}/healthcheck.sh"
+        mode: '0755'
+      when: >-
+        vault_github_pat is defined and
+        vault_github_pat | length > 10 and
+        vault_github_pat != 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+      tags: [github-mcp]
+
+    - name: Deploy GitHub MCP watchdog service
+      ansible.builtin.template:
+        src: templates/github-mcp-watchdog.service.j2
+        dest: "{{ pi_home }}/.config/systemd/user/github-mcp-watchdog.service"
+        mode: '0644'
+      when: >-
+        vault_github_pat is defined and
+        vault_github_pat | length > 10 and
+        vault_github_pat != 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+      notify: Reload systemd
+      tags: [systemd, github-mcp]
+
+    - name: Deploy GitHub MCP watchdog timer
+      ansible.builtin.template:
+        src: templates/github-mcp-watchdog.timer.j2
+        dest: "{{ pi_home }}/.config/systemd/user/github-mcp-watchdog.timer"
+        mode: '0644'
+      when: >-
+        vault_github_pat is defined and
+        vault_github_pat | length > 10 and
+        vault_github_pat != 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+      notify: Reload systemd
+      tags: [systemd, github-mcp]
+
+    - name: Enable and start GitHub MCP watchdog timer
+      ansible.builtin.systemd:
+        name: github-mcp-watchdog.timer
+        enabled: true
+        state: started
+        scope: user
+        daemon_reload: true
+      when: >-
+        vault_github_pat is defined and
+        vault_github_pat | length > 10 and
+        vault_github_pat != 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+      tags: [systemd, github-mcp]
 
     # =========================================================================
     # Secrets (from vault)

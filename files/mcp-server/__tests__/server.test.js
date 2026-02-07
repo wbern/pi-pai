@@ -145,11 +145,6 @@ describe('slugify', () => {
 });
 
 describe('generateSessionDir', () => {
-  it('uses repo name and slugified sessionName as directory when both provided', () => {
-    expect(generateSessionDir("github.com/user/pi-pai", "Add Contributing MD"))
-      .toBe("/pi-pai/add-contributing-md");
-  });
-
   it.each(["", null])('returns /workspace when repo is falsy: %s', (input) => {
     expect(generateSessionDir(input)).toBe("/workspace");
   });
@@ -165,9 +160,14 @@ describe('generateSessionDir', () => {
       vi.unstubAllGlobals();
     });
 
-    it('generates repo/UUID subdirectory when repo provided without sessionName', () => {
+    it('uses repo name, slugified sessionName, and short suffix as directory', () => {
+      expect(generateSessionDir("github.com/user/pi-pai", "Add Contributing MD"))
+        .toBe("/pi-pai--add-contributing-md--abc1");
+    });
+
+    it('generates repo--UUID directory when repo provided without sessionName', () => {
       expect(generateSessionDir("github.com/user/repo"))
-        .toBe("/repo/abc12345");
+        .toBe("/repo--abc12345");
     });
   });
 });

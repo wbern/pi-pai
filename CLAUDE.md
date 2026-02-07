@@ -48,7 +48,7 @@ make copy-tokens # Export tokens for deployment
 │  │ Control     │  │ Project     │      │
 │  │ Plane       │  │ Session     │      │
 │  │ (Docker)    │  │ (Docker)    │      │
-│  │ - No repos  │  │ - ~/Repos   │      │
+│  │ - No repos  │  │ - ~/Sessions│      │
 │  │ - No SSH    │  │ - SSH keys  │      │
 │  │ - MCP tools │  │ - Git access│      │
 │  └──────┬──────┘  └─────────────┘      │

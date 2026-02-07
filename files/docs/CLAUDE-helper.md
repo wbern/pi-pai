@@ -4,7 +4,7 @@ This is a human-in-the-loop Claude for system administration tasks. NOT sandboxe
 
 ## What This Is
 
-A helper instance for setting up and managing the **autonomous agents** that live in `~/Repos`. Those run sandboxed in Docker with `--dangerously-skip-permissions`.
+A helper instance for setting up and managing the **autonomous agents** that live in `~/Sessions`. Those run sandboxed in Docker with `--dangerously-skip-permissions`.
 
 This instance runs on the host with normal permissions - use it for:
 - Installing/configuring Claude Code plugins
@@ -17,7 +17,7 @@ This instance runs on the host with normal permissions - use it for:
 
 ```
 ~/                          <- YOU ARE HERE (helper, human-in-loop)
-├── Repos/                  <- Autonomous agents live here (Docker sandboxed)
+├── Sessions/               <- Autonomous agents live here (Docker sandboxed)
 ├── claude-sandbox.sh       <- Spawns sandboxed sessions
 ├── upgrade-claude.sh       <- Rebuilds Docker image
 ├── tmux-control-plane/     <- MCP server for session orchestration
@@ -30,6 +30,8 @@ This instance runs on the host with normal permissions - use it for:
 |---------|---------|-------|
 | `claude-tmux` | Main tmux session with Claude | `systemctl --user status claude-tmux` |
 | `tmux-control-plane` | MCP server for spawning sessions | `systemctl --user status tmux-control-plane` |
+| `github-mcp` | GitHub MCP server (via mcp-proxy) | `systemctl --user status github-mcp` |
+| `github-mcp-watchdog` | Health check timer (every 30s) | `systemctl --user status github-mcp-watchdog.timer` |
 
 ## Common Tasks
 
@@ -75,6 +77,7 @@ npx @wbern/claude-instructions --scope=user
 ```bash
 systemctl --user restart claude-tmux
 systemctl --user restart tmux-control-plane
+systemctl --user restart github-mcp
 ```
 
 ### Update Claude Code
@@ -93,4 +96,4 @@ systemctl --user restart tmux-control-plane
 ## DO NOT
 
 - Run `--dangerously-skip-permissions` here (that's for sandboxed instances)
-- Modify files in `~/Repos` directly (spawn a sandboxed session instead)
+- Modify files in `~/Sessions` directly (spawn a sandboxed session instead)

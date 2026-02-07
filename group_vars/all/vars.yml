@@ -28,7 +28,7 @@ node_lts_version: "22"
 tmux_session_name: "main"
 
 # Paths
-repos_dir: "{{ pi_home }}/Repos"
+sessions_dir: "{{ pi_home }}/Sessions"
 claude_docker_dir: "{{ pi_home }}/.claude-docker"
 control_plane_dir: "{{ pi_home }}/.claude-control-plane"
 mcp_server_dir: "{{ pi_home }}/tmux-control-plane"
