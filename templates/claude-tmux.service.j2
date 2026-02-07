@@ -1,20 +1,20 @@
 [Unit]
 Description=Claude Code tmux session
+# Rate limit: max 3 restarts in 60 seconds, then give up
+# Check logs with: journalctl --user -u claude-tmux
+StartLimitIntervalSec=60
+StartLimitBurst=3
 
 [Service]
 Type=forking
 ExecStart=/usr/bin/tmux new-session -d -s {{ tmux_session_name }} -n {{ tmux_session_name }} %h/claude-sandbox.sh
 ExecStop=/usr/bin/tmux kill-session -t {{ tmux_session_name }}
 
-# Always restart when session exits (clean or crash)
+# Fallback restart: only triggers when tmux session exits (all windows closed).
+# Primary recovery is the in-script retry loop in claude-sandbox.sh.
 # Does NOT restart when stopped via: systemctl --user stop claude-tmux
 Restart=always
 RestartSec=5
-
-# Rate limit: max 3 restarts in 60 seconds, then give up
-# Check logs with: journalctl --user -u claude-tmux
-StartLimitIntervalSec=60
-StartLimitBurst=3
 
 [Install]
 WantedBy=default.target

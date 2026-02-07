@@ -35,25 +35,61 @@ if [[ "$1" == "--run" ]]; then
 fi
 
 # No args: run control plane (isolated - no repo access, no SSH)
+#
+# Recovery: retries on crash with backoff (primary), systemd Restart=always (fallback).
+# The systemd fallback only triggers if this script exits AND no spawned tmux windows
+# remain — otherwise the tmux session stays alive and systemd sees "active".
 if [[ -z "$1" ]]; then
-    docker run -it --rm \
-        --init \
-        --shm-size={{ docker_shm_size }} \
-        --memory {{ docker_memory_limit }} \
-        --add-host=host.docker.internal:host-gateway \
-        -v ~/.claude-control-plane/workspace:/control-plane \
-        -v ~/.claude-docker:/home/node/.claude \
-        -v ~/.claude-docker/.happy:/home/node/.happy \
-        -w /control-plane \
-        -e TERM=xterm-256color \
-        -e COLORTERM=truecolor \
-        -e TMPDIR=/home/node/.claude/tmp \
-        -e CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
-        -e GITHUB_PAT="$(cat ~/.claude-docker/.github_token 2>/dev/null)" \
-        -e CONTEXT7_TOKEN="$(cat ~/.claude-docker/.context7_token 2>/dev/null)" \
-        -e CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.claude-docker/.oauth_token 2>/dev/null)" \
-        -e CLAUDE_CONFIG_DIR="/home/node/.claude" \
-        claude-code
+    log_cp() { echo "$1" >&2; logger -t claude-control-plane "$1" 2>/dev/null || true; }
+
+    FAILURES=0
+    MAX_FAILURES={{ control_plane_max_restarts | default(5) }}
+
+    while true; do
+        # || captures non-zero exit without triggering set -e
+        EXIT_CODE=0
+        START_TIME=$(date +%s)
+        docker run -it --rm \
+            --init \
+            --shm-size={{ docker_shm_size }} \
+            --memory {{ docker_memory_limit }} \
+            --add-host=host.docker.internal:host-gateway \
+            -v ~/.claude-control-plane/workspace:/control-plane \
+            -v ~/.claude-docker:/home/node/.claude \
+            -v ~/.claude-docker/.happy:/home/node/.happy \
+            -w /control-plane \
+            -e TERM=xterm-256color \
+            -e COLORTERM=truecolor \
+            -e TMPDIR=/home/node/.claude/tmp \
+            -e CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+            -e GITHUB_PAT="$(cat ~/.claude-docker/.github_token 2>/dev/null)" \
+            -e CONTEXT7_TOKEN="$(cat ~/.claude-docker/.context7_token 2>/dev/null)" \
+            -e CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.claude-docker/.oauth_token 2>/dev/null)" \
+            -e CLAUDE_CONFIG_DIR="/home/node/.claude" \
+            claude-code || EXIT_CODE=$?
+
+        # Clean exit (0), SIGINT (130/Ctrl-C), or SIGTERM (143) — don't restart
+        if [[ $EXIT_CODE -eq 0 || $EXIT_CODE -eq 130 || $EXIT_CODE -eq 143 ]]; then
+            log_cp "Control plane exited (code $EXIT_CODE)."
+            break
+        fi
+
+        # Reset failure counter if the container ran for >60s (not a crash loop)
+        DURATION=$(( $(date +%s) - START_TIME ))
+        if [[ $DURATION -gt 60 ]]; then
+            FAILURES=0
+        fi
+
+        FAILURES=$((FAILURES + 1))
+        if [[ $FAILURES -ge $MAX_FAILURES ]]; then
+            log_cp "Control plane failed $FAILURES times in quick succession, giving up."
+            break
+        fi
+
+        DELAY=$((5 * FAILURES))
+        log_cp "Control plane exited ($EXIT_CODE after ${DURATION}s), restarting in ${DELAY}s... ($FAILURES/$MAX_FAILURES)"
+        sleep "$DELAY"
+    done
     exit 0
 fi
 
