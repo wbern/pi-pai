@@ -7,7 +7,11 @@ StartLimitBurst=3
 
 [Service]
 Type=forking
-ExecStart=/usr/bin/tmux new-session -d -s {{ tmux_session_name }} -n {{ tmux_session_name }} %h/claude-sandbox.sh
+# Two-step start: create session first, then send script via send-keys.
+# Running the script as a tmux window command fails because docker run -it
+# cannot negotiate the PTY before the pane's shell is fully initialized.
+ExecStart=/usr/bin/tmux new-session -d -s {{ tmux_session_name }} -n {{ tmux_session_name }}
+ExecStartPost=/bin/bash -c 'sleep 2 && /usr/bin/tmux send-keys -t {{ tmux_session_name }}:{{ tmux_session_name }} "%h/claude-sandbox.sh" Enter'
 ExecStop=/usr/bin/tmux kill-session -t {{ tmux_session_name }}
 
 # Fallback restart: only triggers when tmux session exits (all windows closed).

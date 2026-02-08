@@ -11,7 +11,7 @@ Ansible playbook deploying an autonomous Claude Code server on Raspberry Pi 4. B
 ```bash
 make lint        # Syntax check + handler verification + secrets scan
 make test        # Deploy to OrbStack VM (requires vault + tokens)
-make deploy      # Deploy to Pi (requires vault + tokens, prompts for sudo)
+make deploy      # Deploy to Pi (vault password is cached, no prompt needed)
 make auth        # OAuth flow for claude + happy
 make copy-tokens # Export tokens for deployment
 ```
@@ -73,12 +73,17 @@ make copy-tokens # Export tokens for deployment
 - `group_vars/all/vault.yml` - Secrets (encrypt with ansible-vault)
 - `group_vars/all/zzz_local.yml` - Your overrides (create this, gitignored)
 
+## Pi Access
+
+SSH to the Pi with `ssh claude-shell` (configured in local `~/.ssh/config`). Use this to diagnose services, check logs, and restart containers.
+
 ## Common Pitfalls
 
 1. **Docker group**: Requires reboot after first deploy
 2. **nvm in PATH**: MCP server uses `start.sh` wrapper that sources nvm
 3. **tmux targeting**: Use `-t main:` (trailing colon) for session, not `-t main`
 4. **EXDEV errors**: Plugin installs fail if /tmp is different filesystem
+5. **tmux PTY race**: `docker run -it` needs a `sleep 2` after `tmux new-session -d` — the PTY isn't ready immediately
 
 ## Code Style
 

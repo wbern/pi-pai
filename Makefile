@@ -1,6 +1,6 @@
 # Pi-Pai Makefile
 
-.PHONY: setup lint syntax deploy test test-full verify create destroy clean auth copy-tokens push-tokens
+.PHONY: setup lint syntax deploy test test-full verify create destroy clean auth copy-tokens push-tokens cache-passwords clear-passwords
 
 # First-time setup after cloning
 setup:
@@ -56,11 +56,27 @@ deploy:
 		echo ""; \
 		exit 1; \
 	fi
-	@echo "You will be prompted for:"
-	@echo "  1. Vault password - decrypts secrets in vault.yml"
-	@echo "  2. BECOME password - your Pi's sudo password"
-	@echo ""
-	ansible-playbook playbook.yml --ask-vault-pass --ask-become-pass
+	@TMPD=$$(mktemp -d); trap "rm -rf $$TMPD" EXIT; \
+	VAULT_ARGS=""; BECOME_ARGS=""; CACHED=true; \
+	VP=$$(security find-generic-password -s "pi-pai-vault" -a "$$(whoami)" -w 2>/dev/null || echo ""); \
+	BP=$$(security find-generic-password -s "pi-pai-become" -a "$$(whoami)" -w 2>/dev/null || echo ""); \
+	if [ -n "$$VP" ]; then \
+		printf '%s' "$$VP" > "$$TMPD/vault"; \
+		VAULT_ARGS="--vault-password-file $$TMPD/vault"; \
+	else \
+		VAULT_ARGS="--ask-vault-pass"; CACHED=false; \
+	fi; \
+	if [ -n "$$BP" ]; then \
+		printf "ansible_become_password: '%s'\n" "$$(echo "$$BP" | sed "s/'/''/g")" > "$$TMPD/become.yml"; \
+		BECOME_ARGS="-e @$$TMPD/become.yml"; \
+	else \
+		BECOME_ARGS="--ask-become-pass"; CACHED=false; \
+	fi; \
+	if [ "$$CACHED" = false ]; then \
+		echo "Tip: run 'make cache-passwords' for non-interactive deploys."; \
+		echo ""; \
+	fi; \
+	ansible-playbook playbook.yml $$VAULT_ARGS $$BECOME_ARGS
 
 # Deploy to test VM (OrbStack)
 test:
@@ -123,6 +139,31 @@ verify:
 # Destroy VM
 destroy:
 	molecule destroy
+
+# --- Password caching (for non-interactive deploys) ---
+
+# Cache vault + become passwords in macOS Keychain
+cache-passwords:
+	@printf "Vault password: " && read -s VP && echo && \
+		(security delete-generic-password -s "pi-pai-vault" -a "$$(whoami)" >/dev/null 2>&1 || true) && \
+		security add-generic-password -s "pi-pai-vault" -a "$$(whoami)" -w "$$VP" && \
+		echo "  ✓ Stored in Keychain (pi-pai-vault)"
+	@printf "Become (sudo) password: " && read -s BP && echo && \
+		(security delete-generic-password -s "pi-pai-become" -a "$$(whoami)" >/dev/null 2>&1 || true) && \
+		security add-generic-password -s "pi-pai-become" -a "$$(whoami)" -w "$$BP" && \
+		echo "  ✓ Stored in Keychain (pi-pai-become)"
+	@echo ""
+	@echo "Passwords cached in macOS Keychain."
+	@echo "Run 'make clear-passwords' to remove."
+
+# Remove cached passwords from Keychain
+clear-passwords:
+	@security delete-generic-password -s "pi-pai-vault" -a "$$(whoami)" >/dev/null 2>&1 && \
+		echo "✓ Removed pi-pai-vault from Keychain" || \
+		echo "  (pi-pai-vault not found in Keychain)"
+	@security delete-generic-password -s "pi-pai-become" -a "$$(whoami)" >/dev/null 2>&1 && \
+		echo "✓ Removed pi-pai-become from Keychain" || \
+		echo "  (pi-pai-become not found in Keychain)"
 
 # --- OAuth token management ---
 
