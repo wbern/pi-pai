@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { sanitize, buildPrompt, generateWindowName, generateSessionDir, slugify, parseMemAvailable, parseContainerCount } from '../lib.js';
+import { sanitize, buildPrompt, generateWindowName, generateSessionDir, slugify, parseMemAvailable, parseContainerCount, toSshUrl } from '../lib.js';
 
 describe('sanitize', () => {
   it.each([null, undefined, ""])('returns empty string for falsy input: %s', (input) => {
@@ -51,15 +51,45 @@ describe('sanitize', () => {
   });
 });
 
-describe('buildPrompt', () => {
-  it('returns clone, restart, and instruction when both provided', () => {
-    expect(buildPrompt("github.com/user/repo", "fix the bug"))
-      .toBe("Clone github.com/user/repo into current directory with 'git clone github.com/user/repo .', then call restart_self to pick up settings, then fix the bug");
+describe('toSshUrl', () => {
+  it('converts github.com/user/repo to SSH format', () => {
+    expect(toSshUrl("github.com/user/repo")).toBe("git@github.com:user/repo.git");
   });
 
-  it('returns clone and restart when only repo provided', () => {
+  it('converts https://github.com/user/repo to SSH format', () => {
+    expect(toSshUrl("https://github.com/user/repo")).toBe("git@github.com:user/repo.git");
+  });
+
+  it('strips .git suffix before converting', () => {
+    expect(toSshUrl("github.com/user/repo.git")).toBe("git@github.com:user/repo.git");
+  });
+
+  it('converts http:// URLs too', () => {
+    expect(toSshUrl("http://github.com/user/repo")).toBe("git@github.com:user/repo.git");
+  });
+
+  it('returns non-GitHub URLs unchanged', () => {
+    expect(toSshUrl("gitlab.com/user/repo")).toBe("gitlab.com/user/repo");
+  });
+
+  it('returns already-SSH URLs unchanged', () => {
+    expect(toSshUrl("git@github.com:user/repo.git")).toBe("git@github.com:user/repo.git");
+  });
+
+  it.each([null, undefined, ""])('returns empty string for falsy input: %s', (input) => {
+    expect(toSshUrl(input)).toBe("");
+  });
+});
+
+describe('buildPrompt', () => {
+  it('returns clone with SSH URL, restart, and instruction when both provided', () => {
+    expect(buildPrompt("github.com/user/repo", "fix the bug"))
+      .toBe("Clone github.com/user/repo into current directory with 'git clone git@github.com:user/repo.git .', then call restart_self to pick up settings, then fix the bug");
+  });
+
+  it('returns clone with SSH URL and restart when only repo provided', () => {
     expect(buildPrompt("github.com/user/repo", ""))
-      .toBe("Clone github.com/user/repo into current directory with 'git clone github.com/user/repo .', then call restart_self to pick up CLAUDE.md and settings");
+      .toBe("Clone github.com/user/repo into current directory with 'git clone git@github.com:user/repo.git .', then call restart_self to pick up CLAUDE.md and settings");
   });
 
   it('returns instruction when only instruction provided', () => {

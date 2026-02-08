@@ -56,17 +56,38 @@ export function sanitize(str, allowSlash = false) {
 }
 
 /**
+ * Convert a GitHub URL to SSH format for cloning.
+ * Handles: github.com/user/repo, https://github.com/user/repo, github.com/user/repo.git
+ * Non-GitHub URLs are returned as-is.
+ * @param {string} repo - Repository URL (already sanitized)
+ * @returns {string} SSH URL (git@github.com:user/repo.git) or original URL
+ */
+export function toSshUrl(repo) {
+  if (!repo) return "";
+  // Strip protocol prefix if present
+  const stripped = repo.replace(/^https?:\/\//, "");
+  // Match github.com/owner/repo patterns
+  const match = stripped.match(/^github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/);
+  if (match) {
+    return `git@github.com:${match[1]}.git`;
+  }
+  return repo;
+}
+
+/**
  * Build prompt from repo and instruction inputs.
  * When a repo is specified, instructs to clone into current directory and restart.
+ * Uses SSH URLs for GitHub repos (SSH keys are mounted in containers).
  * @param {string} repo - Git repository URL (already sanitized)
  * @param {string} instruction - Task instruction (already sanitized)
  * @returns {string} Constructed prompt
  */
 export function buildPrompt(repo, instruction) {
+  const cloneUrl = toSshUrl(repo);
   if (repo && instruction) {
-    return `Clone ${repo} into current directory with 'git clone ${repo} .', then call restart_self to pick up settings, then ${instruction}`;
+    return `Clone ${repo} into current directory with 'git clone ${cloneUrl} .', then call restart_self to pick up settings, then ${instruction}`;
   } else if (repo) {
-    return `Clone ${repo} into current directory with 'git clone ${repo} .', then call restart_self to pick up CLAUDE.md and settings`;
+    return `Clone ${repo} into current directory with 'git clone ${cloneUrl} .', then call restart_self to pick up CLAUDE.md and settings`;
   } else if (instruction) {
     return instruction;
   }
