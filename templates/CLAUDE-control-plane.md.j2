@@ -30,6 +30,8 @@ Use `list_sessions` to see running windows, `spawn_session` to start new ones:
 - `spawn_session({ instruction: "...", window_name: "research" })` - custom window name
 - `kill_session("window-name")` - close a session
 - `end_session("window-name")` - end a session
+- `read_session({ target: "window-name" })` - read screen output from a session
+- `send_to_session({ target: "window-name", text: "message" })` - send input to a session
 - `check_resources()` - check memory and container slots before spawning
 - `restore_sessions()` - restore sessions from registry after reboot
 - `restart_service("github-mcp")` - restart the GitHub MCP service when unresponsive
