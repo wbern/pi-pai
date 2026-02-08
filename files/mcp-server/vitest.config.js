@@ -5,7 +5,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
-      include: ['lib.js'],
+      include: ['lib.js', 'registry.js'],
       thresholds: {
         statements: 100,
         branches: 100,

@@ -1,6 +1,6 @@
 [Unit]
 Description=tmux-control-plane MCP server
-After=network.target
+After=network.target claude-tmux.service
 
 [Service]
 Type=simple

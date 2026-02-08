@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { sanitize, buildPrompt, generateWindowName, generateSessionDir, slugify } from '../lib.js';
+import { sanitize, buildPrompt, generateWindowName, generateSessionDir, slugify, parseMemAvailable, parseContainerCount } from '../lib.js';
 
 describe('sanitize', () => {
   it.each([null, undefined, ""])('returns empty string for falsy input: %s', (input) => {
@@ -172,5 +172,57 @@ describe('generateSessionDir', () => {
   it('generates repo--UUID directory when repo provided without sessionName', () => {
     expect(generateSessionDir("github.com/user/repo"))
       .toBe("/repo--abc12345");
+  });
+});
+
+describe('parseMemAvailable', () => {
+  const MEMINFO = [
+    "MemTotal:        3791264 kB",
+    "MemFree:          142536 kB",
+    "MemAvailable:    1048576 kB",
+    "Buffers:          123456 kB",
+  ].join("\n");
+
+  it('parses MemAvailable from /proc/meminfo content', () => {
+    expect(parseMemAvailable(MEMINFO)).toBe(1024);
+  });
+
+  it('returns -1 for empty input', () => {
+    expect(parseMemAvailable("")).toBe(-1);
+  });
+
+  it.each([null, undefined])('returns -1 for falsy input: %s', (input) => {
+    expect(parseMemAvailable(input)).toBe(-1);
+  });
+
+  it('returns -1 when MemAvailable line is missing', () => {
+    expect(parseMemAvailable("MemTotal:  3791264 kB\nMemFree:  142536 kB")).toBe(-1);
+  });
+
+  it('floors to integer MB', () => {
+    // 999 kB = 0.975 MB -> floors to 0
+    expect(parseMemAvailable("MemAvailable:      999 kB")).toBe(0);
+  });
+});
+
+describe('parseContainerCount', () => {
+  it('counts non-empty lines', () => {
+    expect(parseContainerCount("container1\ncontainer2\ncontainer3")).toBe(3);
+  });
+
+  it('returns 0 for empty string', () => {
+    expect(parseContainerCount("")).toBe(0);
+  });
+
+  it.each([null, undefined])('returns 0 for falsy input: %s', (input) => {
+    expect(parseContainerCount(input)).toBe(0);
+  });
+
+  it('ignores blank lines', () => {
+    expect(parseContainerCount("container1\n\n\ncontainer2\n")).toBe(2);
+  });
+
+  it('returns 1 for single container', () => {
+    expect(parseContainerCount("my-container")).toBe(1);
   });
 });

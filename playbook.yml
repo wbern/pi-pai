@@ -426,6 +426,35 @@
       tags: [ssh-key]
 
     # =========================================================================
+    # GitHub Identity (auto-detect from PAT)
+    # =========================================================================
+    - name: Detect GitHub username from PAT
+      ansible.builtin.uri:
+        url: https://api.github.com/user
+        headers:
+          Authorization: "Bearer {{ vault_github_pat }}"
+          Accept: "application/vnd.github+json"
+        return_content: true
+      register: github_user_response
+      when: >-
+        github_owner is not defined and
+        vault_github_pat is defined and
+        vault_github_pat | length > 10 and
+        vault_github_pat != 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+      tags: [always]
+
+    - name: Set github_owner from API response
+      ansible.builtin.set_fact:
+        github_owner: "{{ github_user_response.json.login }}"
+      when: github_user_response is not skipped and github_user_response is succeeded
+      tags: [always]
+
+    - name: Report GitHub identity
+      ansible.builtin.debug:
+        msg: "GitHub owner: {{ github_owner | default('not detected — short repo names won\\'t resolve') }}"
+      tags: [always]
+
+    # =========================================================================
     # Scripts
     # =========================================================================
     - name: Deploy static scripts
@@ -460,10 +489,11 @@
       tags: [docs]
 
     - name: Deploy control plane CLAUDE.md
-      ansible.builtin.copy:
-        src: files/docs/CLAUDE-control-plane.md
+      ansible.builtin.template:
+        src: templates/CLAUDE-control-plane.md.j2
         dest: "{{ control_plane_dir }}/workspace/CLAUDE.md"
         mode: '0644'
+      notify: Restart claude-tmux
       tags: [docs]
 
     - name: Deploy helper CLAUDE.md
@@ -510,6 +540,7 @@
         - package.json
         - start.sh
         - lib.js
+        - registry.js
       notify: Restart tmux-control-plane
       tags: [mcp]
 

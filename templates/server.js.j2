@@ -1,10 +1,17 @@
 import express from "express";
 import { execFileSync, spawn } from "child_process";
-import { sanitize, buildPrompt, generateWindowName, generateSessionDir } from "./lib.js";
+import { readFileSync, existsSync } from "fs";
+import { join } from "path";
+import { sanitize, buildPrompt, generateWindowName, generateSessionDir, parseMemAvailable, parseContainerCount } from "./lib.js";
+import { addSession, removeSession, getAllSessions, reconcile } from "./registry.js";
 
 const app = express();
 const PORT = {{ mcp_server_port }};
 const BEARER_TOKEN = "{{ mcp_bearer_token }}";
+const MAX_SESSIONS = {{ max_project_sessions | default(2) }};
+const MIN_MEMORY_MB = {{ min_available_memory_mb | default(512) }};
+const RESTORE_DELAY = {{ session_restore_delay | default(15) }};
+const REGISTRY_PATH = join(process.env.HOME, ".claude-docker", "sessions.json");
 
 app.use(express.json());
 
@@ -15,6 +22,44 @@ function run(cmd, args = []) {
   } catch (e) {
     throw new Error(e.stderr || e.message);
   }
+}
+
+// Get list of active tmux window names
+function getTmuxWindows() {
+  try {
+    const output = run("tmux", ["list-windows", "-t", "{{ tmux_session_name }}", "-F", "#{window_name}"]);
+    return output.split("\n").filter(n => n.trim() !== "");
+  } catch {
+    return [];
+  }
+}
+
+// Check if the Pi has enough resources to spawn a new session
+function checkResources() {
+  // Memory check
+  try {
+    const meminfo = readFileSync("/proc/meminfo", "utf8");
+    const availMb = parseMemAvailable(meminfo);
+    if (availMb >= 0 && availMb < MIN_MEMORY_MB) {
+      return { ok: false, reason: `Insufficient memory: ${availMb}MB available, ${MIN_MEMORY_MB}MB required` };
+    }
+  } catch {
+    // /proc/meminfo not available (e.g. macOS) — skip check
+  }
+
+  // Container count check (subtract 1 for the always-running control plane container)
+  try {
+    const psOutput = run("docker", ["ps", "--filter", `ancestor={{ docker_image_name }}`, "--format", "{% raw %}{{.Names}}{% endraw %}"]);
+    const total = parseContainerCount(psOutput);
+    const projectCount = Math.max(0, total - 1);
+    if (projectCount >= MAX_SESSIONS) {
+      return { ok: false, reason: `Too many sessions: ${projectCount} running, max ${MAX_SESSIONS}` };
+    }
+  } catch {
+    // docker ps failed — skip check
+  }
+
+  return { ok: true };
 }
 
 const TOOLS = [
@@ -81,6 +126,16 @@ const TOOLS = [
       },
       required: ["service"]
     }
+  },
+  {
+    name: "check_resources",
+    description: "Check if the Pi has enough resources (memory, container slots) to spawn a new session.",
+    inputSchema: { type: "object", properties: {}, required: [] }
+  },
+  {
+    name: "restore_sessions",
+    description: "Restore previously registered sessions after reboot. Skips already-running sessions.",
+    inputSchema: { type: "object", properties: {}, required: [] }
   }
 ];
 
@@ -88,6 +143,12 @@ const toolHandlers = {
   list_sessions: async () => {
     try {
       const output = run("tmux", ["list-windows", "-t", "{{ tmux_session_name }}", "-F", "#{window_index}: #{window_name}"]);
+      // Reconcile registry with live windows
+      const liveWindows = getTmuxWindows();
+      const pruned = reconcile(REGISTRY_PATH, liveWindows);
+      if (pruned.length > 0) {
+        console.log("Pruned stale registry entries:", pruned);
+      }
       return { content: [{ type: "text", text: output || "No windows found" }] };
     } catch (e) {
       return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
@@ -95,6 +156,12 @@ const toolHandlers = {
   },
 
   spawn_session: async ({ repo, instruction, session_name, window_name }) => {
+    // Resource check before spawning
+    const resources = checkResources();
+    if (!resources.ok) {
+      return { content: [{ type: "text", text: `Cannot spawn: ${resources.reason}` }], isError: true };
+    }
+
     // Sanitize inputs to prevent injection
     const safeRepo = sanitize(repo, true);  // allow slashes for URLs
     const safeSessionName = sanitize(session_name);
@@ -124,6 +191,10 @@ const toolHandlers = {
         child.on("error", reject);
       });
       console.log("Spawned:", result);
+
+      // Register session for restore-on-reboot
+      addSession(REGISTRY_PATH, windowName, sessionDir, safeRepo);
+
       return { content: [{ type: "text", text: `Spawned "${windowName}" at ${sessionDir}. Use list_sessions to see all windows.` }] };
     } catch (e) {
       console.error("Spawn error:", e.message);
@@ -138,6 +209,8 @@ const toolHandlers = {
     }
     try {
       run("tmux", ["kill-window", "-t", `{{ tmux_session_name }}:${safeTarget}`]);
+      // Remove from registry
+      removeSession(REGISTRY_PATH, safeTarget);
       return { content: [{ type: "text", text: `Killed window: ${safeTarget}` }] };
     } catch (e) {
       return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
@@ -193,6 +266,94 @@ const toolHandlers = {
       console.error("Restart error:", e.message);
       return { content: [{ type: "text", text: `Failed to restart '${safeName}': ${e.message}` }], isError: true };
     }
+  },
+
+  check_resources: async () => {
+    const resources = checkResources();
+    // Also include raw info for the caller
+    let info = `Status: ${resources.ok ? "OK" : "BLOCKED"}`;
+    if (!resources.ok) info += `\nReason: ${resources.reason}`;
+
+    try {
+      const meminfo = readFileSync("/proc/meminfo", "utf8");
+      const availMb = parseMemAvailable(meminfo);
+      if (availMb >= 0) info += `\nMemory available: ${availMb}MB (min: ${MIN_MEMORY_MB}MB)`;
+    } catch { /* skip */ }
+
+    try {
+      const psOutput = run("docker", ["ps", "--filter", `ancestor={{ docker_image_name }}`, "--format", "{% raw %}{{.Names}}{% endraw %}"]);
+      const total = parseContainerCount(psOutput);
+      const projectCount = Math.max(0, total - 1);
+      info += `\nProject sessions: ${projectCount}/${MAX_SESSIONS}`;
+    } catch { /* skip */ }
+
+    return { content: [{ type: "text", text: info }] };
+  },
+
+  restore_sessions: async () => {
+    const sessions = getAllSessions(REGISTRY_PATH);
+    const entries = Object.entries(sessions);
+    if (entries.length === 0) {
+      return { content: [{ type: "text", text: "No sessions to restore" }] };
+    }
+
+    const liveWindows = new Set(getTmuxWindows());
+    const results = [];
+    let spawned = 0;
+
+    for (const [windowName, session] of entries) {
+      // Skip already-running sessions
+      if (liveWindows.has(windowName)) {
+        results.push(`${windowName}: already running`);
+        continue;
+      }
+
+      // Verify session directory exists on disk
+      const hostDir = join(process.env.HOME, "Sessions", session.dir);
+      if (!existsSync(hostDir)) {
+        removeSession(REGISTRY_PATH, windowName);
+        results.push(`${windowName}: removed (directory missing)`);
+        continue;
+      }
+
+      // Check resources before each spawn
+      const resources = checkResources();
+      if (!resources.ok) {
+        results.push(`${windowName}: skipped (${resources.reason})`);
+        break; // Stop restoring if resources exhausted
+      }
+
+      // Stagger spawns to avoid overwhelming RAM
+      if (spawned > 0) {
+        await new Promise(r => setTimeout(r, 10000));
+      }
+
+      // Spawn with --resume to continue last conversation
+      try {
+        await new Promise((resolve, reject) => {
+          const child = spawn(
+            `${process.env.HOME}/claude-sandbox.sh`,
+            ["--spawn", session.dir, "--resume", windowName],
+            { timeout: 600000, shell: false }
+          );
+          let stdout = "", stderr = "";
+          child.stdout.on("data", d => stdout += d);
+          child.stderr.on("data", d => stderr += d);
+          child.on("close", code => {
+            if (code !== 0) reject(new Error(stderr || `Exit code ${code}`));
+            else resolve(stdout);
+          });
+          child.on("error", reject);
+        });
+        results.push(`${windowName}: restored`);
+        spawned++;
+      } catch (e) {
+        removeSession(REGISTRY_PATH, windowName);
+        results.push(`${windowName}: failed (${e.message})`);
+      }
+    }
+
+    return { content: [{ type: "text", text: results.join("\n") }] };
   }
 };
 
@@ -248,4 +409,15 @@ app.get("/health", (req, res) => res.json({ status: "ok" }));
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`tmux-control-plane running on http://0.0.0.0:${PORT}/mcp`);
+
+  // Auto-restore sessions after boot (delay lets tmux session initialize)
+  setTimeout(async () => {
+    console.log("Checking for sessions to restore...");
+    try {
+      const result = await toolHandlers.restore_sessions({});
+      console.log("Restore result:", result.content[0].text);
+    } catch (e) {
+      console.error("Restore failed:", e.message);
+    }
+  }, RESTORE_DELAY * 1000);
 });

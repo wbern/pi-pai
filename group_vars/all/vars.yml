@@ -13,6 +13,10 @@ docker_shm_size: "2g"
 claude_git_name: "Claude (Pi)"
 claude_git_email: "claude@localhost"
 
+# GitHub owner — auto-detected from PAT at deploy time (see playbook.yml)
+# Can be overridden here if you want a different default (e.g. an org name)
+# github_owner: "my-org"
+
 # MCP server settings
 mcp_server_port: 3100
 github_mcp_port: 3101
@@ -26,6 +30,11 @@ node_lts_version: "22"
 
 # tmux session name
 tmux_session_name: "main"
+
+# Session persistence and resource limits
+max_project_sessions: 2           # Max concurrent project containers
+min_available_memory_mb: 512      # Min free RAM (MB) to allow spawning
+session_restore_delay: 15         # Seconds before boot restore starts
 
 # Paths
 sessions_dir: "{{ pi_home }}/Sessions"

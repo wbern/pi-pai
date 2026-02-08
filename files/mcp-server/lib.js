@@ -3,6 +3,29 @@
  */
 
 /**
+ * Parse MemAvailable from /proc/meminfo content.
+ * @param {string} meminfo - Contents of /proc/meminfo
+ * @returns {number} Available memory in MB, or -1 if not found
+ */
+export function parseMemAvailable(meminfo) {
+  if (!meminfo) return -1;
+  const match = meminfo.match(/^MemAvailable:\s+(\d+)\s+kB$/m);
+  if (!match) return -1;
+  return Math.floor(parseInt(match[1], 10) / 1024);
+}
+
+/**
+ * Parse container count from `docker ps` output.
+ * Each non-empty line of output represents one running container.
+ * @param {string} dockerPsOutput - Output of `docker ps --filter ... --format ...`
+ * @returns {number} Number of running containers
+ */
+export function parseContainerCount(dockerPsOutput) {
+  if (!dockerPsOutput) return 0;
+  return dockerPsOutput.split("\n").filter(line => line.trim() !== "").length;
+}
+
+/**
  * Convert a string to a URL-friendly slug.
  * @param {string} str - Input string
  * @returns {string} Slugified string (lowercase, spaces to dashes)

@@ -6,6 +6,15 @@ run_project() {
     local prompt="$1"
     local workdir="${2:-/workspace}"
     local window_name="$3"
+
+    # --resume sentinel: pass --continue to Claude Code to resume last conversation
+    local claude_args=""
+    if [[ "$prompt" == "--resume" ]]; then
+        claude_args="--continue"
+    elif [[ -n "$prompt" ]]; then
+        claude_args="$prompt"
+    fi
+
     docker run -it --rm \
         --init \
         --shm-size={{ docker_shm_size }} \
@@ -25,7 +34,7 @@ run_project() {
         -e CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.claude-docker/.oauth_token 2>/dev/null)" \
         -e CLAUDE_CONFIG_DIR="/home/node/.claude" \
         ${window_name:+-e TMUX_WINDOW_NAME="$window_name"} \
-        claude-code ${prompt:+"$prompt"}
+        claude-code ${claude_args:+"$claude_args"}
 }
 
 # --run "prompt" "workdir" "window_name": internal, called by tmux to run project session
@@ -44,6 +53,9 @@ if [[ -z "$1" ]]; then
 
     FAILURES=0
     MAX_FAILURES={{ control_plane_max_restarts | default(5) }}
+
+    # tmux PTY needs a moment to initialize after new-session -d
+    sleep 2
 
     while true; do
         # || captures non-zero exit without triggering set -e
