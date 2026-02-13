@@ -64,8 +64,8 @@ export function sanitize(str, allowSlash = false) {
  */
 export function toSshUrl(repo) {
   if (!repo) return "";
-  // Strip protocol prefix if present
-  const stripped = repo.replace(/^https?:\/\//, "");
+  // Strip protocol prefix and trailing slash if present
+  const stripped = repo.replace(/^https?:\/\//, "").replace(/\/$/, "");
   // Match github.com/owner/repo patterns
   const match = stripped.match(/^github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/);
   if (match) {

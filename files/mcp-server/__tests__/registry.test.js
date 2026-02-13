@@ -40,6 +40,12 @@ describe('loadRegistry', () => {
     expect(reg).toEqual({ version: 1, sessions: {} });
   });
 
+  it('returns empty registry when sessions is null', () => {
+    writeFileSync(registryPath, JSON.stringify({ version: 1, sessions: null }));
+    const reg = loadRegistry(registryPath);
+    expect(reg).toEqual({ version: 1, sessions: {} });
+  });
+
   it('loads valid registry file', () => {
     const data = {
       version: 1,

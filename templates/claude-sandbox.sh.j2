@@ -24,6 +24,7 @@ run_project() {
         -v ~/.claude-docker:/home/node/.claude \
         -v ~/.claude-docker/.ssh:/home/node/.ssh:ro \
         -v ~/.claude-docker/.happy:/home/node/.happy \
+        -v ~/.claude-docker/.mcp.json:/home/node/.claude.json:ro \
         -w "$workdir" \
         -e TERM=xterm-256color \
         -e COLORTERM=truecolor \

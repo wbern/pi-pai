@@ -68,6 +68,10 @@ describe('toSshUrl', () => {
     expect(toSshUrl("http://github.com/user/repo")).toBe("git@github.com:user/repo.git");
   });
 
+  it('handles trailing slash', () => {
+    expect(toSshUrl("github.com/user/repo/")).toBe("git@github.com:user/repo.git");
+  });
+
   it('returns non-GitHub URLs unchanged', () => {
     expect(toSshUrl("gitlab.com/user/repo")).toBe("gitlab.com/user/repo");
   });

@@ -17,7 +17,7 @@ const REGISTRY_VERSION = 1;
 export function loadRegistry(registryPath) {
   try {
     const data = JSON.parse(readFileSync(registryPath, "utf8"));
-    if (data && data.version === REGISTRY_VERSION && typeof data.sessions === "object") {
+    if (data && data.version === REGISTRY_VERSION && data.sessions && typeof data.sessions === "object") {
       return data;
     }
   } catch {
