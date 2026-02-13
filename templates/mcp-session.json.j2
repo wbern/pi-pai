@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "tmux-control-plane": {
+      "type": "http",
+      "url": "http://host.docker.internal:{{ mcp_server_port }}/mcp",
+      "headers": {
+        "Authorization": "Bearer {{ mcp_session_token }}"
+      }
+    }
+  }
+}

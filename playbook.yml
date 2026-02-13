@@ -576,10 +576,10 @@
       notify: Restart claude-tmux
       tags: [mcp]
 
-    - name: Deploy project session MCP config
+    - name: Deploy project session MCP config (user-level, restricted)
       ansible.builtin.template:
-        src: templates/mcp.json.j2
-        dest: "{{ claude_docker_dir }}/.mcp.json"
+        src: templates/mcp-session.json.j2
+        dest: "{{ claude_docker_dir }}/.claude.json"
         mode: '0644'
       tags: [mcp, configs]
 

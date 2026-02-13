@@ -8,6 +8,8 @@ import { addSession, removeSession, getAllSessions, reconcile } from "./registry
 const app = express();
 const PORT = {{ mcp_server_port }};
 const BEARER_TOKEN = "{{ mcp_bearer_token }}";
+const SESSION_TOKEN = "{{ mcp_session_token }}";
+const SESSION_TOOLS = new Set(["restart_self", "restart_service", "check_resources"]);
 const MAX_SESSIONS = {{ max_project_sessions | default(2) }};
 const MIN_MEMORY_MB = {{ min_available_memory_mb | default(512) }};
 const RESTORE_DELAY = {{ session_restore_delay | default(15) }};
@@ -421,14 +423,19 @@ const toolHandlers = {
 
 function validateAuth(req, res, next) {
   const auth = req.headers.authorization;
-  if (!auth || auth !== `Bearer ${BEARER_TOKEN}`) {
+  if (auth === `Bearer ${BEARER_TOKEN}`) {
+    req.role = "control-plane";
+  } else if (auth === `Bearer ${SESSION_TOKEN}`) {
+    req.role = "session";
+  } else {
     return res.status(401).json({ error: "Unauthorized" });
   }
   next();
 }
 
-async function handleJsonRpc(request) {
+async function handleJsonRpc(request, role) {
   const { method, params, id } = request;
+  const isSession = role === "session";
 
   switch (method) {
     case "initialize":
@@ -442,16 +449,22 @@ async function handleJsonRpc(request) {
       };
     case "notifications/initialized":
       return null;
-    case "tools/list":
-      return { jsonrpc: "2.0", id, result: { tools: TOOLS } };
-    case "tools/call":
+    case "tools/list": {
+      const tools = isSession ? TOOLS.filter(t => SESSION_TOOLS.has(t.name)) : TOOLS;
+      return { jsonrpc: "2.0", id, result: { tools } };
+    }
+    case "tools/call": {
       const { name, arguments: args } = params;
+      if (isSession && !SESSION_TOOLS.has(name)) {
+        return { jsonrpc: "2.0", id, error: { code: -32601, message: `Unknown tool: ${name}` } };
+      }
       const handler = toolHandlers[name];
       if (!handler) {
         return { jsonrpc: "2.0", id, error: { code: -32601, message: `Unknown tool: ${name}` } };
       }
       const result = await handler(args || {});
       return { jsonrpc: "2.0", id, result };
+    }
     default:
       return { jsonrpc: "2.0", id, error: { code: -32601, message: `Method not found: ${method}` } };
   }
@@ -459,7 +472,7 @@ async function handleJsonRpc(request) {
 
 app.post("/mcp", validateAuth, async (req, res) => {
   try {
-    const response = await handleJsonRpc(req.body);
+    const response = await handleJsonRpc(req.body, req.role);
     if (response === null) return res.status(202).end();
     res.json(response);
   } catch (e) {
